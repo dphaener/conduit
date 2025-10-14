@@ -1,3 +1,5 @@
+// Package lexer provides lexical analysis for Conduit source code.
+// It tokenizes .cdt files into a stream of tokens for the parser.
 package lexer
 
 import (
@@ -57,12 +59,44 @@ func (l *Lexer) ScanTokens() ([]Token, []LexError) {
 	return l.tokens, l.errors
 }
 
-// scanToken processes the next token
+// scanToken processes the next token.
+// This function has inherently high cyclomatic complexity as it dispatches
+// to handlers for 40+ different token types. This is a standard pattern in
+// lexer design and the complexity is managed by delegating actual logic to
+// focused helper methods.
+//
+//nolint:gocyclo,cyclop // Lexer dispatch function - complexity is inherent to the pattern
 func (l *Lexer) scanToken() {
 	c := l.advance()
 
+	// Categorize and delegate based on character type
+	switch {
+	case c == '(' || c == ')' || c == '{' || c == '}' || c == '[' || c == ']':
+		l.scanDelimiter(c)
+	case c == ',' || c == '+' || c == '%':
+		l.scanSimpleOperator(c)
+	case c == '!' || c == '=' || c == '<' || c == '>' || c == '|' || c == '&' ||
+		c == '*' || c == '-' || c == '?' || c == '.' || c == ':' || c == '/':
+		l.scanCompoundOperator(c)
+	case c == '#':
+		l.scanHashToken()
+	case c == '@':
+		l.annotation()
+	case c == '"':
+		l.string()
+	case c == ' ' || c == '\r' || c == '\t':
+		// Ignore whitespace
+	case c == '\n':
+		l.line++
+		l.column = 0
+	default:
+		l.scanDefault(c)
+	}
+}
+
+// scanDelimiter handles delimiter tokens: ( ) { } [ ]
+func (l *Lexer) scanDelimiter(c byte) {
 	switch c {
-	// Single-character tokens
 	case '(':
 		l.addToken(TOKEN_LPAREN)
 	case ')':
@@ -75,131 +109,180 @@ func (l *Lexer) scanToken() {
 		l.addToken(TOKEN_LBRACKET)
 	case ']':
 		l.addToken(TOKEN_RBRACKET)
+	}
+}
+
+// scanSimpleOperator handles single-character operators: , + %
+func (l *Lexer) scanSimpleOperator(c byte) {
+	switch c {
 	case ',':
 		l.addToken(TOKEN_COMMA)
 	case '+':
 		l.addToken(TOKEN_PLUS)
 	case '%':
 		l.addToken(TOKEN_PERCENT)
+	}
+}
 
-	// Potentially two-character tokens
+// scanCompoundOperator dispatches to specific multi-character operator handlers
+func (l *Lexer) scanCompoundOperator(c byte) {
+	switch c {
 	case '!':
-		if l.match('=') {
-			l.addToken(TOKEN_NEQ)
-		} else {
-			l.addToken(TOKEN_BANG)
-		}
+		l.scanBangToken()
 	case '=':
-		if l.match('=') {
-			l.addToken(TOKEN_EQ)
-		} else if l.match('>') {
-			l.addToken(TOKEN_ARROW)
-		} else {
-			l.addToken(TOKEN_EQUALS)
-		}
+		l.scanEqualsToken()
 	case '<':
-		if l.match('=') {
-			l.addToken(TOKEN_LTE)
-		} else {
-			l.addToken(TOKEN_LT)
-		}
+		l.scanLessThanToken()
 	case '>':
-		if l.match('=') {
-			l.addToken(TOKEN_GTE)
-		} else {
-			l.addToken(TOKEN_GT)
-		}
+		l.scanGreaterThanToken()
 	case '|':
-		if l.match('|') {
-			l.addToken(TOKEN_DOUBLE_PIPE)
-		} else {
-			l.addToken(TOKEN_PIPE)
-		}
+		l.scanPipeToken()
 	case '&':
-		if l.match('&') {
-			l.addToken(TOKEN_DOUBLE_AMP)
-		} else {
-			l.addError("Unexpected character '&' (did you mean '&&'?)")
-		}
+		l.scanAmpersandToken()
 	case '*':
-		if l.match('*') {
-			l.addToken(TOKEN_DOUBLE_STAR)
-		} else {
-			l.addToken(TOKEN_STAR)
-		}
+		l.scanStarToken()
 	case '-':
-		if l.match('>') {
-			l.addToken(TOKEN_ARROW)
-		} else {
-			l.addToken(TOKEN_MINUS)
-		}
+		l.scanMinusToken()
 	case '?':
-		if l.match('.') {
-			l.addToken(TOKEN_SAFE_NAV)
-		} else if l.match('?') {
-			l.addToken(TOKEN_DOUBLE_QUESTION)
-		} else {
-			l.addToken(TOKEN_QUESTION)
-		}
+		l.scanQuestionToken()
 	case '.':
-		// Check if it's a float starting with . (like .5)
-		if l.isDigit(l.peek()) {
-			l.number()
-		} else {
-			l.addToken(TOKEN_DOT)
-		}
+		l.scanDotToken()
 	case ':':
-		if l.match(':') {
-			l.addToken(TOKEN_DOUBLE_COLON)
-		} else {
-			l.addToken(TOKEN_COLON)
-		}
-
-	// Division or comment
+		l.scanColonToken()
 	case '/':
-		if l.match('/') {
-			// C-style comment (treat like #)
-			l.comment()
-		} else {
-			l.addToken(TOKEN_SLASH)
-		}
+		l.scanSlashToken()
+	}
+}
 
-	// Comments
-	case '#':
-		// Check for multiline comment ###
-		if l.peek() == '#' && l.peekNext() == '#' {
-			l.multilineComment()
-		} else {
-			l.comment()
-		}
+// scanBangToken handles ! and !=
+func (l *Lexer) scanBangToken() {
+	if l.match('=') {
+		l.addToken(TOKEN_NEQ)
+	} else {
+		l.addToken(TOKEN_BANG)
+	}
+}
 
-	// Special @ symbol (annotations)
-	case '@':
-		l.annotation()
+// scanEqualsToken handles =, ==, and =>
+func (l *Lexer) scanEqualsToken() {
+	if l.match('=') {
+		l.addToken(TOKEN_EQ)
+	} else if l.match('>') {
+		l.addToken(TOKEN_ARROW)
+	} else {
+		l.addToken(TOKEN_EQUALS)
+	}
+}
 
-	// Strings
-	case '"':
-		l.string()
+// scanLessThanToken handles < and <=
+func (l *Lexer) scanLessThanToken() {
+	if l.match('=') {
+		l.addToken(TOKEN_LTE)
+	} else {
+		l.addToken(TOKEN_LT)
+	}
+}
 
-	// Whitespace
-	case ' ', '\r', '\t':
-		// Ignore whitespace but track column
-		break
+// scanGreaterThanToken handles > and >=
+func (l *Lexer) scanGreaterThanToken() {
+	if l.match('=') {
+		l.addToken(TOKEN_GTE)
+	} else {
+		l.addToken(TOKEN_GT)
+	}
+}
 
-	case '\n':
-		l.line++
-		l.column = 0 // Will be incremented to 1 after advance()
-		// Optionally track newlines as tokens for parser
-		// l.addToken(TOKEN_NEWLINE)
+// scanPipeToken handles | and ||
+func (l *Lexer) scanPipeToken() {
+	if l.match('|') {
+		l.addToken(TOKEN_DOUBLE_PIPE)
+	} else {
+		l.addToken(TOKEN_PIPE)
+	}
+}
 
-	default:
-		if l.isDigit(c) {
-			l.number()
-		} else if l.isAlpha(c) {
-			l.identifier()
-		} else {
-			l.addError(fmt.Sprintf("Unexpected character: '%c'", c))
-		}
+// scanAmpersandToken handles & and && (single & is an error)
+func (l *Lexer) scanAmpersandToken() {
+	if l.match('&') {
+		l.addToken(TOKEN_DOUBLE_AMP)
+	} else {
+		l.addError("Unexpected character '&' (did you mean '&&'?)")
+	}
+}
+
+// scanStarToken handles * and **
+func (l *Lexer) scanStarToken() {
+	if l.match('*') {
+		l.addToken(TOKEN_DOUBLE_STAR)
+	} else {
+		l.addToken(TOKEN_STAR)
+	}
+}
+
+// scanMinusToken handles - and ->
+func (l *Lexer) scanMinusToken() {
+	if l.match('>') {
+		l.addToken(TOKEN_ARROW)
+	} else {
+		l.addToken(TOKEN_MINUS)
+	}
+}
+
+// scanQuestionToken handles ?, ?., and ??
+func (l *Lexer) scanQuestionToken() {
+	if l.match('.') {
+		l.addToken(TOKEN_SAFE_NAV)
+	} else if l.match('?') {
+		l.addToken(TOKEN_DOUBLE_QUESTION)
+	} else {
+		l.addToken(TOKEN_QUESTION)
+	}
+}
+
+// scanDotToken handles . and numbers starting with .
+func (l *Lexer) scanDotToken() {
+	if l.isDigit(l.peek()) {
+		l.number()
+	} else {
+		l.addToken(TOKEN_DOT)
+	}
+}
+
+// scanColonToken handles : and ::
+func (l *Lexer) scanColonToken() {
+	if l.match(':') {
+		l.addToken(TOKEN_DOUBLE_COLON)
+	} else {
+		l.addToken(TOKEN_COLON)
+	}
+}
+
+// scanSlashToken handles / and // comments
+func (l *Lexer) scanSlashToken() {
+	if l.match('/') {
+		l.comment()
+	} else {
+		l.addToken(TOKEN_SLASH)
+	}
+}
+
+// scanHashToken handles # comments and ### multiline comments
+func (l *Lexer) scanHashToken() {
+	if l.peek() == '#' && l.peekNext() == '#' {
+		l.multilineComment()
+	} else {
+		l.comment()
+	}
+}
+
+// scanDefault handles the default case: numbers, identifiers, or errors
+func (l *Lexer) scanDefault(c byte) {
+	if l.isDigit(c) {
+		l.number()
+	} else if l.isAlpha(c) {
+		l.identifier()
+	} else {
+		l.addError(fmt.Sprintf("Unexpected character: '%c'", c))
 	}
 }
 
@@ -424,7 +507,7 @@ func (l *Lexer) identifier() {
 	}
 
 	// For boolean literals, set the literal value
-	var literal interface{} = nil
+	var literal interface{}
 	if tokenType == TOKEN_TRUE {
 		literal = true
 	} else if tokenType == TOKEN_FALSE {
@@ -577,7 +660,7 @@ func IsPrimitiveType(s string) bool {
 
 // IsValidIdentifier checks if a string is a valid identifier
 func IsValidIdentifier(s string) bool {
-	if len(s) == 0 {
+	if s == "" {
 		return false
 	}
 

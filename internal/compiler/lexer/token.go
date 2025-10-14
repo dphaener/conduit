@@ -6,25 +6,36 @@ import "fmt"
 type TokenType int
 
 const (
-	// Special tokens
+	// TOKEN_EOF marks the end of the token stream.
 	TOKEN_EOF TokenType = iota
+	// TOKEN_ERROR represents a lexical error encountered during scanning.
 	TOKEN_ERROR
+	// TOKEN_COMMENT contains comment text (currently not emitted).
 	TOKEN_COMMENT
+	// TOKEN_NEWLINE represents a line break (currently not emitted).
 	TOKEN_NEWLINE
 
-	// Keywords - Resource definition
-	TOKEN_RESOURCE // resource
-	TOKEN_ENUM     // enum (for inline enum types)
-	TOKEN_ARRAY    // array
-	TOKEN_HASH     // hash
+	// TOKEN_RESOURCE marks the 'resource' keyword for defining resources.
+	TOKEN_RESOURCE
+	// TOKEN_ENUM marks the 'enum' keyword for inline enum types.
+	TOKEN_ENUM
+	// TOKEN_ARRAY marks the 'array' keyword for array types.
+	TOKEN_ARRAY
+	// TOKEN_HASH marks the 'hash' keyword for hash/map types.
+	TOKEN_HASH
 
-	// Keywords - Lifecycle hooks
-	TOKEN_ON          // on
-	TOKEN_AFTER       // after
-	TOKEN_BEFORE      // before
-	TOKEN_TRANSACTION // transaction
-	TOKEN_ASYNC       // async
-	TOKEN_RESCUE      // rescue
+	// TOKEN_ON marks the 'on' keyword for lifecycle hooks.
+	TOKEN_ON
+	// TOKEN_AFTER marks the 'after' keyword for post-operation hooks.
+	TOKEN_AFTER
+	// TOKEN_BEFORE marks the 'before' keyword for pre-operation hooks.
+	TOKEN_BEFORE
+	// TOKEN_TRANSACTION marks the '@transaction' annotation.
+	TOKEN_TRANSACTION
+	// TOKEN_ASYNC marks the '@async' annotation.
+	TOKEN_ASYNC
+	// TOKEN_RESCUE marks the 'rescue' keyword for error handling.
+	TOKEN_RESCUE
 
 	// Keywords - Query and scope
 	TOKEN_WHERE // where

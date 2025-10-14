@@ -1,0 +1,230 @@
+# golangci-lint configuration for Conduit compiler
+# Run: golangci-lint run
+
+run:
+  # Timeout for analysis
+  timeout: 5m
+
+# All available settings of specific linters
+linters-settings:
+  errcheck:
+    # Report about not checking of errors in type assertions: `a := b.(MyStruct)`
+    check-type-assertions: true
+    # Report about assignment of errors to blank identifier: `num, _ := strconv.Atoi(numStr)`
+    check-blank: false
+
+  govet:
+    # Enable all analyzers
+    enable-all: true
+    # Disable specific analyzers
+    disable:
+      - shadow       # Too noisy for lexer/parser code
+      - fieldalignment  # Premature optimization, not worth the complexity
+
+  gocyclo:
+    # Minimal code complexity to report (higher for lexer/parser code)
+    min-complexity: 25
+
+  gofmt:
+    # Simplify code: gofmt with `-s` option
+    simplify: true
+
+  goimports:
+    # Put imports beginning with prefix after 3rd-party packages
+    local-prefixes: github.com/conduit-lang/conduit
+
+  misspell:
+    # Correct spellings using locale preferences
+    locale: US
+
+  goconst:
+    # Minimal length of string constant
+    min-len: 3
+    # Minimum occurrences of constant string count to trigger issue
+    min-occurrences: 3
+
+  gocritic:
+    # Enable multiple checks by tags
+    enabled-tags:
+      - diagnostic
+      - performance
+      - style
+    disabled-checks:
+      - whyNoLint          # We'll use this judiciously
+      - commentFormatting  # Sometimes we want specific formatting
+      - ifElseChain        # if-else is often clearer than switch in lexer code
+      - appendCombine      # Multiple appends are often clearer
+
+  revive:
+    # Enable all available rules
+    rules:
+      # Essential rules
+      - name: blank-imports
+      - name: context-as-argument
+      - name: dot-imports
+      - name: error-return
+      - name: error-strings
+      - name: error-naming
+      - name: exported
+      - name: if-return
+      - name: increment-decrement
+      - name: var-declaration
+      - name: package-comments
+      - name: range
+      - name: receiver-naming
+      - name: indent-error-flow
+      - name: superfluous-else
+      - name: unreachable-code
+      # Disabled rules
+      - name: unused-parameter
+        disabled: true  # Too noisy for interface implementations
+      - name: var-naming
+        disabled: true  # Allow ALL_CAPS for token constants (compiler convention)
+
+  lll:
+    # Max line length
+    line-length: 140  # A bit generous for complex expressions
+
+  funlen:
+    # Maximum function length
+    lines: 100
+    statements: 50
+
+  cyclop:
+    # Maximum function complexity (higher for lexer/parser code)
+    max-complexity: 25
+
+  errorlint:
+    # Check for plain error comparisons
+    comparison: true
+    # Check for plain type assertions and type switches
+    asserts: true
+
+linters:
+  # Disable all linters as default
+  disable-all: true
+
+  # Enable specific linters
+  enable:
+    # Default (enabled by golangci-lint)
+    - errcheck      # Unchecked errors
+    - gosimple      # Simplify code
+    - govet         # Suspicious constructs
+    - ineffassign   # Unused assignments
+    - staticcheck   # Advanced static analysis
+    - unused        # Unused code
+
+    # Additional essential linters
+    - gofmt         # Code formatting
+    - goimports     # Import formatting
+    - gocritic      # Comprehensive checks
+    - revive        # Golint replacement
+    - misspell      # Spelling
+    - unconvert     # Unnecessary conversions
+    - errorlint     # Error wrapping
+
+    # Code quality
+    - goconst       # Repeated strings
+    - gocyclo       # Cyclomatic complexity
+    - cyclop        # Package/function complexity
+    - funlen        # Function length
+    - lll           # Line length
+
+    # Bug detection
+    - bodyclose     # HTTP response body closure
+    - nilerr        # Returning nil error incorrectly
+    - nilnil        # Returning nil error and nil value
+    - rowserrcheck  # SQL Rows.Err check
+    - sqlclosecheck # SQL resource closure
+
+    # Style (lenient for compiler code)
+    - whitespace    # Unnecessary whitespace
+
+issues:
+  # Directories to exclude
+  exclude-dirs:
+    - vendor
+    - third_party
+    - testdata
+
+  # Files to exclude
+  exclude-files:
+    - ".*\\.pb\\.go$"
+    - ".*_generated\\.go$"
+
+  # Independently from option `exclude` we use default exclude patterns
+  exclude-use-default: false
+
+  # Make issues output unique by line
+  uniq-by-line: true
+
+  # Maximum issues count per one linter
+  max-issues-per-linter: 0
+
+  # Maximum count of issues with the same text
+  max-same-issues: 0
+
+  # List of regexps of issue texts to exclude
+  exclude-rules:
+    # Exclude some linters from running on tests files
+    - path: _test\.go
+      linters:
+        - gocyclo
+        - errcheck
+        - funlen
+        - goconst
+
+    # Exclude some linters from running on benchmarks
+    - path: _bench_test\.go
+      linters:
+        - funlen
+        - gocyclo
+
+    # Allow long lines in Go generate comments
+    - linters:
+        - lll
+      source: "^//go:generate "
+
+    # Exclude known false positives
+    - text: "weak cryptographic primitive"
+      linters:
+        - gosec
+
+    # Exclude "G304: Potential file inclusion via variable" for file operations
+    - text: "G304"
+      linters:
+        - gosec
+      path: lexer/
+
+    # Allow token constants to use ALL_CAPS naming
+    - text: "var-naming: don't use ALL_CAPS"
+      linters:
+        - revive
+      path: token\.go
+
+    # Allow missing periods in token constant comments (they're just labels)
+    - text: "Comment should end in a period"
+      linters:
+        - godot
+      path: token\.go
+
+    # Allow exported constants to have group comments or inline comments in token.go
+    - text: "exported:.*TOKEN_"
+      linters:
+        - revive
+      path: token\.go
+
+# Output configuration
+output:
+  # Format: colored-line-number|line-number|json|tab|checkstyle|code-climate
+  formats:
+    - format: colored-line-number
+
+  # Print lines of code with issue
+  print-issued-lines: true
+
+  # Print linter name in the end of issue text
+  print-linter-name: true
+
+  # Sort results by: filepath, line and column
+  sort-results: true
