@@ -215,6 +215,75 @@ All specs are **complete and authoritative**. When implementing:
 - Generated Go code: `build/generated/{resources,handlers,main}.go`
 - Migrations: `migrations/{number}_{description}.sql`
 
+### Commit Message Conventions
+
+**Always use Conventional Commits format** for consistency and automated tooling support.
+
+**Format:**
+```
+<type>: <subject>
+
+<body>
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+Co-Authored-By: Claude <noreply@anthropic.com>
+```
+
+**Types:**
+- `feat`: New feature or capability
+- `fix`: Bug fix
+- `docs`: Documentation changes
+- `refactor`: Code refactoring without behavior change
+- `test`: Adding or updating tests
+- `chore`: Maintenance tasks (dependencies, tooling, etc.)
+- `perf`: Performance improvements
+- `build`: Build system or dependency changes
+- `ci`: CI/CD configuration changes
+
+**Examples:**
+
+```
+feat: implement lexer for Conduit source files
+
+Add tokenization for all Conduit language constructs including
+resources, fields, relationships, hooks, and expressions.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+Co-Authored-By: Claude <noreply@anthropic.com>
+```
+
+```
+docs: add CLAUDE.md for AI assistant guidance
+
+Provides comprehensive guidance for Claude Code when working in this
+repository, including project overview, architecture summary, and
+implementation guidelines.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+Co-Authored-By: Claude <noreply@anthropic.com>
+```
+
+```
+refactor: simplify type checker error handling
+
+Replace verbose error construction with builder pattern for cleaner
+type checking code.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+Co-Authored-By: Claude <noreply@anthropic.com>
+```
+
+**Commit body guidelines:**
+- Explain **why** the change was made, not just what changed
+- Keep subject line under 72 characters
+- Wrap body at 72 characters
+- Use imperative mood ("add" not "added" or "adds")
+- Include Claude Code attribution footer on all commits
+
 ## Design Philosophy for AI Collaboration
 
 **LLM-Optimized:**
