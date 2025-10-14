@@ -1,0 +1,88 @@
+# Conduit Build Artifacts
+build/
+*.conduit-cache
+*.meta.json.cache
+
+# Compiled binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Go build artifacts
+vendor/
+*.sum
+
+# Generated code
+generated/
+*.generated.go
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+*.env
+
+# IDE & Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+*.sublime-project
+*.sublime-workspace
+
+# Operating System
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Dependencies
+node_modules/
+bower_components/
+
+# Test coverage
+coverage/
+*.coverprofile
+*.out
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.bak
+*.backup
+
+# Debug files
+debug/
+*.pprof
+*.prof
+
+# Documentation build
+docs/_build/
+site/
+
+# Package manager
+*.tar.gz
+*.zip
+*.rar
