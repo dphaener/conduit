@@ -219,6 +219,27 @@ func TestLexer_UnknownAnnotation(t *testing.T) {
 	checkTokenTypes(t, tokens, expected)
 }
 
+// Test annotation column positions
+func TestLexer_AnnotationColumnPositions(t *testing.T) {
+	source := "@primary @custom_annotation"
+	tokens, _ := scanSource(source)
+
+	// @primary should be at column 1
+	if tokens[0].Column != 1 {
+		t.Errorf("@primary: expected column 1, got %d", tokens[0].Column)
+	}
+
+	// @ in @custom should be at column 10 (after space)
+	if tokens[1].Column != 10 {
+		t.Errorf("@ in @custom: expected column 10, got %d", tokens[1].Column)
+	}
+
+	// "custom_annotation" identifier should be at column 11
+	if tokens[2].Column != 11 {
+		t.Errorf("custom_annotation: expected column 11, got %d", tokens[2].Column)
+	}
+}
+
 // Test integer literals
 func TestLexer_IntegerLiterals(t *testing.T) {
 	tests := []struct {

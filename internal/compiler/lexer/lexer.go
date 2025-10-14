@@ -7,30 +7,34 @@ import (
 	"unicode"
 )
 
-// Lexer tokenizes Conduit source code
+// Lexer tokenizes Conduit source code.
+//
+// Thread Safety: Lexer instances are NOT thread-safe. Each goroutine must
+// create its own Lexer instance via New(). This is the recommended approach
+// for parallel lexing in scenarios like LSP diagnostics.
 type Lexer struct {
-	source  string      // Source code to tokenize
-	start   int         // Start position of current token
-	current int         // Current position in source
-	line    int         // Current line number (1-indexed)
-	column  int         // Current column number (1-indexed)
-	tokens  []Token     // Collected tokens
-	errors  []LexError  // Collected errors
+	source  string     // Source code to tokenize
+	start   int        // Start position of current token
+	current int        // Current position in source
+	line    int        // Current line number (1-indexed)
+	column  int        // Current column number (1-indexed)
+	tokens  []Token    // Collected tokens
+	errors  []LexError // Collected errors
 
 	// State for string interpolation tracking
-	interpolationDepth int  // Tracks nesting level of interpolation
+	interpolationDepth int // Tracks nesting level of interpolation
 }
 
 // New creates a new Lexer for the given source code
 func New(source string) *Lexer {
 	return &Lexer{
-		source:  source,
-		start:   0,
-		current: 0,
-		line:    1,
-		column:  1,
-		tokens:  make([]Token, 0),
-		errors:  make([]LexError, 0),
+		source:             source,
+		start:              0,
+		current:            0,
+		line:               1,
+		column:             1,
+		tokens:             make([]Token, 0),
+		errors:             make([]LexError, 0),
 		interpolationDepth: 0,
 	}
 }
@@ -223,22 +227,24 @@ func (l *Lexer) annotation() {
 			Type:   tokenType,
 			Lexeme: "@" + annotationName,
 			Line:   l.line,
-			Column: l.column - len(annotationName) - 1,
+			Column: l.column - (l.current - l.start),
 		}
 		l.tokens = append(l.tokens, token)
 	} else {
 		// Unknown annotation - emit @ and identifier separately
+		// @ position is at the start of the entire token
+		atColumn := l.column - (l.current - l.start)
 		l.tokens = append(l.tokens, Token{
 			Type:   TOKEN_AT,
 			Lexeme: "@",
 			Line:   l.line,
-			Column: l.column - len(annotationName) - 1,
+			Column: atColumn,
 		})
 		l.tokens = append(l.tokens, Token{
 			Type:   TOKEN_IDENTIFIER,
 			Lexeme: annotationName,
 			Line:   l.line,
-			Column: l.column - len(annotationName),
+			Column: atColumn + 1, // identifier starts right after @
 		})
 	}
 }
@@ -563,7 +569,7 @@ func IsPrimitiveType(s string) bool {
 		"timestamp": true, "date": true, "time": true,
 		"uuid": true, "ulid": true,
 		"email": true, "url": true, "phone": true,
-		"json": true,
+		"json":  true,
 		"array": true, "hash": true, "enum": true,
 	}
 	return primitiveTypes[s]

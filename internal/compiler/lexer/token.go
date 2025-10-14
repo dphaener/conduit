@@ -31,50 +31,50 @@ const (
 	TOKEN_HAS   // has
 
 	// Keywords - Annotations
-	TOKEN_HAS_MANY       // @has_many
-	TOKEN_NESTED         // @nested
-	TOKEN_MIDDLEWARE     // @middleware
-	TOKEN_FUNCTION       // @function
-	TOKEN_VALIDATE       // @validate
-	TOKEN_CONSTRAINT     // @constraint
-	TOKEN_INVARIANT      // @invariant
-	TOKEN_COMPUTED       // @computed
-	TOKEN_SCOPE          // @scope
-	TOKEN_OPERATIONS     // @operations
-	TOKEN_PRIMARY        // @primary
-	TOKEN_AUTO           // @auto
-	TOKEN_AUTO_UPDATE    // @auto_update
-	TOKEN_UNIQUE         // @unique
-	TOKEN_REQUIRED       // @required (deprecated but recognized)
-	TOKEN_DEFAULT        // @default
-	TOKEN_MIN            // @min
-	TOKEN_MAX            // @max
-	TOKEN_PATTERN        // @pattern
-	TOKEN_STRICT         // @strict
+	TOKEN_HAS_MANY    // @has_many
+	TOKEN_NESTED      // @nested
+	TOKEN_MIDDLEWARE  // @middleware
+	TOKEN_FUNCTION    // @function
+	TOKEN_VALIDATE    // @validate
+	TOKEN_CONSTRAINT  // @constraint
+	TOKEN_INVARIANT   // @invariant
+	TOKEN_COMPUTED    // @computed
+	TOKEN_SCOPE       // @scope
+	TOKEN_OPERATIONS  // @operations
+	TOKEN_PRIMARY     // @primary
+	TOKEN_AUTO        // @auto
+	TOKEN_AUTO_UPDATE // @auto_update
+	TOKEN_UNIQUE      // @unique
+	TOKEN_REQUIRED    // @required (deprecated but recognized)
+	TOKEN_DEFAULT     // @default
+	TOKEN_MIN         // @min
+	TOKEN_MAX         // @max
+	TOKEN_PATTERN     // @pattern
+	TOKEN_STRICT      // @strict
 
 	// Keywords - Control flow
-	TOKEN_IF      // if
-	TOKEN_ELSIF   // elsif
-	TOKEN_ELSE    // else
-	TOKEN_UNLESS  // unless
-	TOKEN_RETURN  // return
-	TOKEN_LET     // let
-	TOKEN_MATCH   // match
-	TOKEN_WHEN    // when
+	TOKEN_IF        // if
+	TOKEN_ELSIF     // elsif
+	TOKEN_ELSE      // else
+	TOKEN_UNLESS    // unless
+	TOKEN_RETURN    // return
+	TOKEN_LET       // let
+	TOKEN_MATCH     // match
+	TOKEN_WHEN      // when
 	TOKEN_CONDITION // condition
 	TOKEN_ERROR_KW  // error (keyword for error messages in constraints)
 
 	// Keywords - Special identifiers
-	TOKEN_SELF     // self
-	TOKEN_THROUGH  // through
-	TOKEN_AS       // as
-	TOKEN_UNDER    // under
-	TOKEN_IN       // in
-	TOKEN_NOT_IN   // not_in
-	TOKEN_OR       // or
-	TOKEN_AND      // and
-	TOKEN_NOT      // not
-	TOKEN_BY       // by
+	TOKEN_SELF    // self
+	TOKEN_THROUGH // through
+	TOKEN_AS      // as
+	TOKEN_UNDER   // under
+	TOKEN_IN      // in
+	TOKEN_NOT_IN  // not_in
+	TOKEN_OR      // or
+	TOKEN_AND     // and
+	TOKEN_NOT     // not
+	TOKEN_BY      // by
 
 	// Primitive types
 	TOKEN_STRING    // string
@@ -95,13 +95,13 @@ const (
 	TOKEN_JSON      // json
 
 	// Literals
-	TOKEN_IDENTIFIER      // user_name, slugify, etc.
-	TOKEN_INT_LITERAL     // 42, 1000, etc.
-	TOKEN_FLOAT_LITERAL   // 3.14, 2.5e10, etc.
-	TOKEN_STRING_LITERAL  // "hello", "multi\nline", etc.
-	TOKEN_TRUE            // true
-	TOKEN_FALSE           // false
-	TOKEN_NULL            // null, nil
+	TOKEN_IDENTIFIER     // user_name, slugify, etc.
+	TOKEN_INT_LITERAL    // 42, 1000, etc.
+	TOKEN_FLOAT_LITERAL  // 3.14, 2.5e10, etc.
+	TOKEN_STRING_LITERAL // "hello", "multi\nline", etc.
+	TOKEN_TRUE           // true
+	TOKEN_FALSE          // false
+	TOKEN_NULL           // null, nil
 
 	// Operators - Single character
 	TOKEN_BANG     // !
@@ -121,17 +121,17 @@ const (
 	TOKEN_GT       // >
 
 	// Operators - Two character
-	TOKEN_ARROW          // ->
-	TOKEN_EQ             // ==
-	TOKEN_NEQ            // !=
-	TOKEN_LTE            // <=
-	TOKEN_GTE            // >=
-	TOKEN_DOUBLE_PIPE    // ||
-	TOKEN_DOUBLE_AMP     // &&
-	TOKEN_DOUBLE_STAR    // **
-	TOKEN_DOUBLE_COLON   // ::
+	TOKEN_ARROW           // ->
+	TOKEN_EQ              // ==
+	TOKEN_NEQ             // !=
+	TOKEN_LTE             // <=
+	TOKEN_GTE             // >=
+	TOKEN_DOUBLE_PIPE     // ||
+	TOKEN_DOUBLE_AMP      // &&
+	TOKEN_DOUBLE_STAR     // **
+	TOKEN_DOUBLE_COLON    // ::
 	TOKEN_DOUBLE_QUESTION // ??
-	TOKEN_SAFE_NAV       // ?.
+	TOKEN_SAFE_NAV        // ?.
 
 	// Delimiters
 	TOKEN_LBRACE    // {
@@ -149,118 +149,118 @@ const (
 
 // TokenTypeNames maps token types to their string representations
 var TokenTypeNames = map[TokenType]string{
-	TOKEN_EOF:       "EOF",
-	TOKEN_ERROR:     "ERROR",
-	TOKEN_COMMENT:   "COMMENT",
-	TOKEN_NEWLINE:   "NEWLINE",
-	TOKEN_RESOURCE:  "RESOURCE",
-	TOKEN_ENUM:      "ENUM",
-	TOKEN_ARRAY:     "ARRAY",
-	TOKEN_HASH:      "HASH",
-	TOKEN_ON:        "ON",
-	TOKEN_AFTER:     "AFTER",
-	TOKEN_BEFORE:    "BEFORE",
-	TOKEN_TRANSACTION: "TRANSACTION",
-	TOKEN_ASYNC:     "ASYNC",
-	TOKEN_RESCUE:    "RESCUE",
-	TOKEN_WHERE:     "WHERE",
-	TOKEN_HAS:       "HAS",
-	TOKEN_HAS_MANY:  "HAS_MANY",
-	TOKEN_NESTED:    "NESTED",
-	TOKEN_MIDDLEWARE: "MIDDLEWARE",
-	TOKEN_FUNCTION:  "FUNCTION",
-	TOKEN_VALIDATE:  "VALIDATE",
-	TOKEN_CONSTRAINT: "CONSTRAINT",
-	TOKEN_INVARIANT: "INVARIANT",
-	TOKEN_COMPUTED:  "COMPUTED",
-	TOKEN_SCOPE:     "SCOPE",
-	TOKEN_OPERATIONS: "OPERATIONS",
-	TOKEN_PRIMARY:   "PRIMARY",
-	TOKEN_AUTO:      "AUTO",
-	TOKEN_AUTO_UPDATE: "AUTO_UPDATE",
-	TOKEN_UNIQUE:    "UNIQUE",
-	TOKEN_REQUIRED:  "REQUIRED",
-	TOKEN_DEFAULT:   "DEFAULT",
-	TOKEN_MIN:       "MIN",
-	TOKEN_MAX:       "MAX",
-	TOKEN_PATTERN:   "PATTERN",
-	TOKEN_STRICT:    "STRICT",
-	TOKEN_IF:        "IF",
-	TOKEN_ELSIF:     "ELSIF",
-	TOKEN_ELSE:      "ELSE",
-	TOKEN_UNLESS:    "UNLESS",
-	TOKEN_RETURN:    "RETURN",
-	TOKEN_LET:       "LET",
-	TOKEN_MATCH:     "MATCH",
-	TOKEN_WHEN:      "WHEN",
-	TOKEN_CONDITION: "CONDITION",
-	TOKEN_ERROR_KW:  "ERROR_KW",
-	TOKEN_SELF:      "SELF",
-	TOKEN_THROUGH:   "THROUGH",
-	TOKEN_AS:        "AS",
-	TOKEN_UNDER:     "UNDER",
-	TOKEN_IN:        "IN",
-	TOKEN_NOT_IN:    "NOT_IN",
-	TOKEN_OR:        "OR",
-	TOKEN_AND:       "AND",
-	TOKEN_NOT:       "NOT",
-	TOKEN_BY:        "BY",
-	TOKEN_STRING:    "STRING",
-	TOKEN_TEXT:      "TEXT",
-	TOKEN_MARKDOWN:  "MARKDOWN",
-	TOKEN_INT:       "INT",
-	TOKEN_FLOAT:     "FLOAT",
-	TOKEN_DECIMAL:   "DECIMAL",
-	TOKEN_BOOL:      "BOOL",
-	TOKEN_TIMESTAMP: "TIMESTAMP",
-	TOKEN_DATE:      "DATE",
-	TOKEN_TIME:      "TIME",
-	TOKEN_UUID:      "UUID",
-	TOKEN_ULID:      "ULID",
-	TOKEN_EMAIL:     "EMAIL",
-	TOKEN_URL:       "URL",
-	TOKEN_PHONE:     "PHONE",
-	TOKEN_JSON:      "JSON",
-	TOKEN_IDENTIFIER: "IDENTIFIER",
-	TOKEN_INT_LITERAL: "INT_LITERAL",
-	TOKEN_FLOAT_LITERAL: "FLOAT_LITERAL",
-	TOKEN_STRING_LITERAL: "STRING_LITERAL",
-	TOKEN_TRUE:       "TRUE",
-	TOKEN_FALSE:      "FALSE",
-	TOKEN_NULL:       "NULL",
-	TOKEN_BANG:       "BANG",
-	TOKEN_QUESTION:   "QUESTION",
-	TOKEN_AT:         "AT",
-	TOKEN_PIPE:       "PIPE",
-	TOKEN_COLON:      "COLON",
-	TOKEN_DOT:        "DOT",
-	TOKEN_COMMA:      "COMMA",
-	TOKEN_EQUALS:     "EQUALS",
-	TOKEN_PLUS:       "PLUS",
-	TOKEN_MINUS:      "MINUS",
-	TOKEN_STAR:       "STAR",
-	TOKEN_SLASH:      "SLASH",
-	TOKEN_PERCENT:    "PERCENT",
-	TOKEN_LT:         "LT",
-	TOKEN_GT:         "GT",
-	TOKEN_ARROW:      "ARROW",
-	TOKEN_EQ:         "EQ",
-	TOKEN_NEQ:        "NEQ",
-	TOKEN_LTE:        "LTE",
-	TOKEN_GTE:        "GTE",
-	TOKEN_DOUBLE_PIPE: "DOUBLE_PIPE",
-	TOKEN_DOUBLE_AMP: "DOUBLE_AMP",
-	TOKEN_DOUBLE_STAR: "DOUBLE_STAR",
-	TOKEN_DOUBLE_COLON: "DOUBLE_COLON",
-	TOKEN_DOUBLE_QUESTION: "DOUBLE_QUESTION",
-	TOKEN_SAFE_NAV:    "SAFE_NAV",
-	TOKEN_LBRACE:      "LBRACE",
-	TOKEN_RBRACE:      "RBRACE",
-	TOKEN_LPAREN:      "LPAREN",
-	TOKEN_RPAREN:      "RPAREN",
-	TOKEN_LBRACKET:    "LBRACKET",
-	TOKEN_RBRACKET:    "RBRACKET",
-	TOKEN_HASH_MARK:   "HASH_MARK",
+	TOKEN_EOF:                 "EOF",
+	TOKEN_ERROR:               "ERROR",
+	TOKEN_COMMENT:             "COMMENT",
+	TOKEN_NEWLINE:             "NEWLINE",
+	TOKEN_RESOURCE:            "RESOURCE",
+	TOKEN_ENUM:                "ENUM",
+	TOKEN_ARRAY:               "ARRAY",
+	TOKEN_HASH:                "HASH",
+	TOKEN_ON:                  "ON",
+	TOKEN_AFTER:               "AFTER",
+	TOKEN_BEFORE:              "BEFORE",
+	TOKEN_TRANSACTION:         "TRANSACTION",
+	TOKEN_ASYNC:               "ASYNC",
+	TOKEN_RESCUE:              "RESCUE",
+	TOKEN_WHERE:               "WHERE",
+	TOKEN_HAS:                 "HAS",
+	TOKEN_HAS_MANY:            "HAS_MANY",
+	TOKEN_NESTED:              "NESTED",
+	TOKEN_MIDDLEWARE:          "MIDDLEWARE",
+	TOKEN_FUNCTION:            "FUNCTION",
+	TOKEN_VALIDATE:            "VALIDATE",
+	TOKEN_CONSTRAINT:          "CONSTRAINT",
+	TOKEN_INVARIANT:           "INVARIANT",
+	TOKEN_COMPUTED:            "COMPUTED",
+	TOKEN_SCOPE:               "SCOPE",
+	TOKEN_OPERATIONS:          "OPERATIONS",
+	TOKEN_PRIMARY:             "PRIMARY",
+	TOKEN_AUTO:                "AUTO",
+	TOKEN_AUTO_UPDATE:         "AUTO_UPDATE",
+	TOKEN_UNIQUE:              "UNIQUE",
+	TOKEN_REQUIRED:            "REQUIRED",
+	TOKEN_DEFAULT:             "DEFAULT",
+	TOKEN_MIN:                 "MIN",
+	TOKEN_MAX:                 "MAX",
+	TOKEN_PATTERN:             "PATTERN",
+	TOKEN_STRICT:              "STRICT",
+	TOKEN_IF:                  "IF",
+	TOKEN_ELSIF:               "ELSIF",
+	TOKEN_ELSE:                "ELSE",
+	TOKEN_UNLESS:              "UNLESS",
+	TOKEN_RETURN:              "RETURN",
+	TOKEN_LET:                 "LET",
+	TOKEN_MATCH:               "MATCH",
+	TOKEN_WHEN:                "WHEN",
+	TOKEN_CONDITION:           "CONDITION",
+	TOKEN_ERROR_KW:            "ERROR_KW",
+	TOKEN_SELF:                "SELF",
+	TOKEN_THROUGH:             "THROUGH",
+	TOKEN_AS:                  "AS",
+	TOKEN_UNDER:               "UNDER",
+	TOKEN_IN:                  "IN",
+	TOKEN_NOT_IN:              "NOT_IN",
+	TOKEN_OR:                  "OR",
+	TOKEN_AND:                 "AND",
+	TOKEN_NOT:                 "NOT",
+	TOKEN_BY:                  "BY",
+	TOKEN_STRING:              "STRING",
+	TOKEN_TEXT:                "TEXT",
+	TOKEN_MARKDOWN:            "MARKDOWN",
+	TOKEN_INT:                 "INT",
+	TOKEN_FLOAT:               "FLOAT",
+	TOKEN_DECIMAL:             "DECIMAL",
+	TOKEN_BOOL:                "BOOL",
+	TOKEN_TIMESTAMP:           "TIMESTAMP",
+	TOKEN_DATE:                "DATE",
+	TOKEN_TIME:                "TIME",
+	TOKEN_UUID:                "UUID",
+	TOKEN_ULID:                "ULID",
+	TOKEN_EMAIL:               "EMAIL",
+	TOKEN_URL:                 "URL",
+	TOKEN_PHONE:               "PHONE",
+	TOKEN_JSON:                "JSON",
+	TOKEN_IDENTIFIER:          "IDENTIFIER",
+	TOKEN_INT_LITERAL:         "INT_LITERAL",
+	TOKEN_FLOAT_LITERAL:       "FLOAT_LITERAL",
+	TOKEN_STRING_LITERAL:      "STRING_LITERAL",
+	TOKEN_TRUE:                "TRUE",
+	TOKEN_FALSE:               "FALSE",
+	TOKEN_NULL:                "NULL",
+	TOKEN_BANG:                "BANG",
+	TOKEN_QUESTION:            "QUESTION",
+	TOKEN_AT:                  "AT",
+	TOKEN_PIPE:                "PIPE",
+	TOKEN_COLON:               "COLON",
+	TOKEN_DOT:                 "DOT",
+	TOKEN_COMMA:               "COMMA",
+	TOKEN_EQUALS:              "EQUALS",
+	TOKEN_PLUS:                "PLUS",
+	TOKEN_MINUS:               "MINUS",
+	TOKEN_STAR:                "STAR",
+	TOKEN_SLASH:               "SLASH",
+	TOKEN_PERCENT:             "PERCENT",
+	TOKEN_LT:                  "LT",
+	TOKEN_GT:                  "GT",
+	TOKEN_ARROW:               "ARROW",
+	TOKEN_EQ:                  "EQ",
+	TOKEN_NEQ:                 "NEQ",
+	TOKEN_LTE:                 "LTE",
+	TOKEN_GTE:                 "GTE",
+	TOKEN_DOUBLE_PIPE:         "DOUBLE_PIPE",
+	TOKEN_DOUBLE_AMP:          "DOUBLE_AMP",
+	TOKEN_DOUBLE_STAR:         "DOUBLE_STAR",
+	TOKEN_DOUBLE_COLON:        "DOUBLE_COLON",
+	TOKEN_DOUBLE_QUESTION:     "DOUBLE_QUESTION",
+	TOKEN_SAFE_NAV:            "SAFE_NAV",
+	TOKEN_LBRACE:              "LBRACE",
+	TOKEN_RBRACE:              "RBRACE",
+	TOKEN_LPAREN:              "LPAREN",
+	TOKEN_RPAREN:              "RPAREN",
+	TOKEN_LBRACKET:            "LBRACKET",
+	TOKEN_RBRACKET:            "RBRACKET",
+	TOKEN_HASH_MARK:           "HASH_MARK",
 	TOKEN_INTERPOLATION_START: "INTERPOLATION_START",
 	TOKEN_INTERPOLATION_END:   "INTERPOLATION_END",
 }
@@ -371,16 +371,16 @@ var AnnotationKeywords = map[string]TokenType{
 	"async":       TOKEN_ASYNC,
 
 	// Resource annotations
-	"has_many":    TOKEN_HAS_MANY,
-	"nested":      TOKEN_NESTED,
-	"middleware":  TOKEN_MIDDLEWARE,
-	"function":    TOKEN_FUNCTION,
-	"validate":    TOKEN_VALIDATE,
-	"constraint":  TOKEN_CONSTRAINT,
-	"invariant":   TOKEN_INVARIANT,
-	"computed":    TOKEN_COMPUTED,
-	"scope":       TOKEN_SCOPE,
-	"operations":  TOKEN_OPERATIONS,
+	"has_many":   TOKEN_HAS_MANY,
+	"nested":     TOKEN_NESTED,
+	"middleware": TOKEN_MIDDLEWARE,
+	"function":   TOKEN_FUNCTION,
+	"validate":   TOKEN_VALIDATE,
+	"constraint": TOKEN_CONSTRAINT,
+	"invariant":  TOKEN_INVARIANT,
+	"computed":   TOKEN_COMPUTED,
+	"scope":      TOKEN_SCOPE,
+	"operations": TOKEN_OPERATIONS,
 
 	// Field annotations
 	"primary":     TOKEN_PRIMARY,
