@@ -23,6 +23,7 @@ type Program struct {
 
 func (p *Program) node() {}
 
+// Location returns the source location of the program node in the AST.
 func (p *Program) Location() SourceLocation {
 	if len(p.Resources) > 0 {
 		return p.Resources[0].Loc
@@ -48,6 +49,7 @@ type ResourceNode struct {
 
 func (r *ResourceNode) node() {}
 
+// Location returns the source location of the resource node in the AST.
 func (r *ResourceNode) Location() SourceLocation {
 	return r.Loc
 }
@@ -64,6 +66,7 @@ type FieldNode struct {
 
 func (f *FieldNode) node() {}
 
+// Location returns the source location of the field node in the AST.
 func (f *FieldNode) Location() SourceLocation {
 	return f.Loc
 }
@@ -90,6 +93,7 @@ const (
 type TypeNode struct {
 	Kind         TypeKind
 	Name         string       // Name of the type (e.g., "string", "User")
+	Nullable     bool         // true for ?, false for !
 	ElementType  *TypeNode    // For array<T>
 	KeyType      *TypeNode    // For hash<K,V>
 	ValueType    *TypeNode    // For hash<K,V>
@@ -100,6 +104,7 @@ type TypeNode struct {
 
 func (t *TypeNode) node() {}
 
+// Location returns the source location of the type node in the AST.
 func (t *TypeNode) Location() SourceLocation {
 	return t.Loc
 }
@@ -117,6 +122,7 @@ type HookNode struct {
 
 func (h *HookNode) node() {}
 
+// Location returns the source location of the hook node in the AST.
 func (h *HookNode) Location() SourceLocation {
 	return h.Loc
 }
@@ -131,6 +137,7 @@ type ValidationNode struct {
 
 func (v *ValidationNode) node() {}
 
+// Location returns the source location of the validation node in the AST.
 func (v *ValidationNode) Location() SourceLocation {
 	return v.Loc
 }
@@ -148,6 +155,7 @@ type ConstraintNode struct {
 
 func (c *ConstraintNode) node() {}
 
+// Location returns the source location of the constraint node in the AST.
 func (c *ConstraintNode) Location() SourceLocation {
 	return c.Loc
 }
@@ -166,6 +174,7 @@ type RelationshipNode struct {
 
 func (r *RelationshipNode) node() {}
 
+// Location returns the source location of the relationship node in the AST.
 func (r *RelationshipNode) Location() SourceLocation {
 	return r.Loc
 }
@@ -194,6 +203,7 @@ type ScopeNode struct {
 
 func (s *ScopeNode) node() {}
 
+// Location returns the source location of the scope node in the AST.
 func (s *ScopeNode) Location() SourceLocation {
 	return s.Loc
 }
@@ -208,6 +218,7 @@ type ComputedNode struct {
 
 func (c *ComputedNode) node() {}
 
+// Location returns the source location of the computed node in the AST.
 func (c *ComputedNode) Location() SourceLocation {
 	return c.Loc
 }
@@ -222,6 +233,7 @@ type ArgumentNode struct {
 
 func (a *ArgumentNode) node() {}
 
+// Location returns the source location of the argument node in the AST.
 func (a *ArgumentNode) Location() SourceLocation {
 	return a.Loc
 }
@@ -241,6 +253,7 @@ type ExprStmt struct {
 func (e *ExprStmt) node()     {}
 func (e *ExprStmt) stmtNode() {}
 
+// Location returns the source location of the expression statement in the AST.
 func (e *ExprStmt) Location() SourceLocation {
 	return e.Loc
 }
@@ -255,6 +268,7 @@ type AssignmentStmt struct {
 func (a *AssignmentStmt) node()     {}
 func (a *AssignmentStmt) stmtNode() {}
 
+// Location returns the source location of the assignment statement in the AST.
 func (a *AssignmentStmt) Location() SourceLocation {
 	return a.Loc
 }
@@ -270,6 +284,7 @@ type LetStmt struct {
 func (l *LetStmt) node()     {}
 func (l *LetStmt) stmtNode() {}
 
+// Location returns the source location of the let statement in the AST.
 func (l *LetStmt) Location() SourceLocation {
 	return l.Loc
 }
@@ -283,6 +298,7 @@ type ReturnStmt struct {
 func (r *ReturnStmt) node()     {}
 func (r *ReturnStmt) stmtNode() {}
 
+// Location returns the source location of the return statement in the AST.
 func (r *ReturnStmt) Location() SourceLocation {
 	return r.Loc
 }
@@ -299,6 +315,7 @@ type IfStmt struct {
 func (i *IfStmt) node()     {}
 func (i *IfStmt) stmtNode() {}
 
+// Location returns the source location of the if statement in the AST.
 func (i *IfStmt) Location() SourceLocation {
 	return i.Loc
 }
@@ -320,6 +337,7 @@ type BlockStmt struct {
 func (b *BlockStmt) node()     {}
 func (b *BlockStmt) stmtNode() {}
 
+// Location returns the source location of the block statement in the AST.
 func (b *BlockStmt) Location() SourceLocation {
 	return b.Loc
 }
@@ -335,6 +353,7 @@ type RescueStmt struct {
 func (r *RescueStmt) node()     {}
 func (r *RescueStmt) stmtNode() {}
 
+// Location returns the source location of the rescue statement in the AST.
 func (r *RescueStmt) Location() SourceLocation {
 	return r.Loc
 }
@@ -349,6 +368,7 @@ type MatchStmt struct {
 func (m *MatchStmt) node()     {}
 func (m *MatchStmt) stmtNode() {}
 
+// Location returns the source location of the match statement in the AST.
 func (m *MatchStmt) Location() SourceLocation {
 	return m.Loc
 }

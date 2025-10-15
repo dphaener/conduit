@@ -9,6 +9,7 @@ type LiteralExpr struct {
 func (l *LiteralExpr) node()     {}
 func (l *LiteralExpr) exprNode() {}
 
+// Location returns the source location of the literal expression in the AST.
 func (l *LiteralExpr) Location() SourceLocation {
 	return l.Loc
 }
@@ -22,6 +23,7 @@ type IdentifierExpr struct {
 func (i *IdentifierExpr) node()     {}
 func (i *IdentifierExpr) exprNode() {}
 
+// Location returns the source location of the identifier expression in the AST.
 func (i *IdentifierExpr) Location() SourceLocation {
 	return i.Loc
 }
@@ -37,6 +39,7 @@ type BinaryExpr struct {
 func (b *BinaryExpr) node()     {}
 func (b *BinaryExpr) exprNode() {}
 
+// Location returns the source location of the binary expression in the AST.
 func (b *BinaryExpr) Location() SourceLocation {
 	return b.Loc
 }
@@ -51,6 +54,7 @@ type UnaryExpr struct {
 func (u *UnaryExpr) node()     {}
 func (u *UnaryExpr) exprNode() {}
 
+// Location returns the source location of the unary expression in the AST.
 func (u *UnaryExpr) Location() SourceLocation {
 	return u.Loc
 }
@@ -66,6 +70,7 @@ type LogicalExpr struct {
 func (l *LogicalExpr) node()     {}
 func (l *LogicalExpr) exprNode() {}
 
+// Location returns the source location of the logical expression in the AST.
 func (l *LogicalExpr) Location() SourceLocation {
 	return l.Loc
 }
@@ -81,6 +86,7 @@ type CallExpr struct {
 func (c *CallExpr) node()     {}
 func (c *CallExpr) exprNode() {}
 
+// Location returns the source location of the call expression in the AST.
 func (c *CallExpr) Location() SourceLocation {
 	return c.Loc
 }
@@ -95,6 +101,7 @@ type FieldAccessExpr struct {
 func (f *FieldAccessExpr) node()     {}
 func (f *FieldAccessExpr) exprNode() {}
 
+// Location returns the source location of the field access expression in the AST.
 func (f *FieldAccessExpr) Location() SourceLocation {
 	return f.Loc
 }
@@ -109,6 +116,7 @@ type SafeNavigationExpr struct {
 func (s *SafeNavigationExpr) node()     {}
 func (s *SafeNavigationExpr) exprNode() {}
 
+// Location returns the source location of the safe navigation expression in the AST.
 func (s *SafeNavigationExpr) Location() SourceLocation {
 	return s.Loc
 }
@@ -122,6 +130,7 @@ type ArrayLiteralExpr struct {
 func (a *ArrayLiteralExpr) node()     {}
 func (a *ArrayLiteralExpr) exprNode() {}
 
+// Location returns the source location of the array literal expression in the AST.
 func (a *ArrayLiteralExpr) Location() SourceLocation {
 	return a.Loc
 }
@@ -135,6 +144,7 @@ type HashLiteralExpr struct {
 func (h *HashLiteralExpr) node()     {}
 func (h *HashLiteralExpr) exprNode() {}
 
+// Location returns the source location of the hash literal expression in the AST.
 func (h *HashLiteralExpr) Location() SourceLocation {
 	return h.Loc
 }
@@ -156,6 +166,7 @@ type IndexExpr struct {
 func (i *IndexExpr) node()     {}
 func (i *IndexExpr) exprNode() {}
 
+// Location returns the source location of the index expression in the AST.
 func (i *IndexExpr) Location() SourceLocation {
 	return i.Loc
 }
@@ -170,6 +181,7 @@ type NullCoalesceExpr struct {
 func (n *NullCoalesceExpr) node()     {}
 func (n *NullCoalesceExpr) exprNode() {}
 
+// Location returns the source location of the null coalesce expression in the AST.
 func (n *NullCoalesceExpr) Location() SourceLocation {
 	return n.Loc
 }
@@ -183,6 +195,7 @@ type ParenExpr struct {
 func (p *ParenExpr) node()     {}
 func (p *ParenExpr) exprNode() {}
 
+// Location returns the source location of the parenthesized expression in the AST.
 func (p *ParenExpr) Location() SourceLocation {
 	return p.Loc
 }
@@ -195,6 +208,7 @@ type SelfExpr struct {
 func (s *SelfExpr) node()     {}
 func (s *SelfExpr) exprNode() {}
 
+// Location returns the source location of the self expression in the AST.
 func (s *SelfExpr) Location() SourceLocation {
 	return s.Loc
 }
@@ -208,6 +222,7 @@ type InterpolatedStringExpr struct {
 func (i *InterpolatedStringExpr) node()     {}
 func (i *InterpolatedStringExpr) exprNode() {}
 
+// Location returns the source location of the interpolated string expression in the AST.
 func (i *InterpolatedStringExpr) Location() SourceLocation {
 	return i.Loc
 }
@@ -223,6 +238,7 @@ type RangeExpr struct {
 func (r *RangeExpr) node()     {}
 func (r *RangeExpr) exprNode() {}
 
+// Location returns the source location of the range expression in the AST.
 func (r *RangeExpr) Location() SourceLocation {
 	return r.Loc
 }
@@ -237,6 +253,7 @@ type LambdaExpr struct {
 func (l *LambdaExpr) node()     {}
 func (l *LambdaExpr) exprNode() {}
 
+// Location returns the source location of the lambda expression in the AST.
 func (l *LambdaExpr) Location() SourceLocation {
 	return l.Loc
 }
