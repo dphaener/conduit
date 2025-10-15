@@ -7,6 +7,11 @@ import (
 	"github.com/conduit-lang/conduit/internal/compiler/lexer"
 )
 
+const (
+	hookTimingBefore = "before"
+	hookTimingAfter  = "after"
+)
+
 // Parser transforms a stream of tokens into an Abstract Syntax Tree (AST)
 type Parser struct {
 	tokens  []lexer.Token
@@ -116,7 +121,7 @@ func (p *Parser) parseResourceAnnotation(resource *ast.ResourceNode) {
 	}
 
 	switch annotationName {
-	case "before", "after":
+	case hookTimingBefore, hookTimingAfter:
 		if hook := p.parseHook(annotationToken); hook != nil {
 			resource.Hooks = append(resource.Hooks, hook)
 		}
@@ -203,183 +208,179 @@ func (p *Parser) parseType() *ast.TypeNode {
 
 	// Check for primitive types
 	if p.isPrimitiveType() {
-		typeToken := p.advance()
-		typeNode := &ast.TypeNode{
-			Kind: ast.TypePrimitive,
-			Name: p.getTypeName(typeToken.Type),
-			Loc:  loc,
-		}
-
-		// Check for nullability marker
-		if p.match(lexer.TOKEN_BANG) {
-			// Non-nullable
-		} else if p.match(lexer.TOKEN_QUESTION) {
-			// Nullable
-		} else {
-			p.error(p.peek(), "Type must have nullability marker (! or ?)")
-		}
-
-		return typeNode
+		return p.parsePrimitiveType(loc)
 	}
 
 	// Check for array type
 	if p.match(lexer.TOKEN_ARRAY) {
-		if !p.match(lexer.TOKEN_LT) {
-			p.error(p.peek(), "Expected '<' after 'array'")
-			return nil
-		}
-
-		elementType := p.parseType()
-		if elementType == nil {
-			return nil
-		}
-
-		if !p.match(lexer.TOKEN_GT) {
-			p.error(p.peek(), "Expected '>' after array element type")
-			return nil
-		}
-
-		typeNode := &ast.TypeNode{
-			Kind:        ast.TypeArray,
-			Name:        "array",
-			ElementType: elementType,
-			Loc:         loc,
-		}
-
-		// Check for nullability marker
-		if p.match(lexer.TOKEN_BANG) {
-			// Non-nullable
-		} else if p.match(lexer.TOKEN_QUESTION) {
-			// Nullable
-		} else {
-			p.error(p.peek(), "Type must have nullability marker (! or ?)")
-		}
-
-		return typeNode
+		return p.parseArrayType(loc)
 	}
 
 	// Check for hash type
 	if p.match(lexer.TOKEN_HASH) {
-		if !p.match(lexer.TOKEN_LT) {
-			p.error(p.peek(), "Expected '<' after 'hash'")
-			return nil
-		}
-
-		keyType := p.parseType()
-		if keyType == nil {
-			return nil
-		}
-
-		if !p.match(lexer.TOKEN_COMMA) {
-			p.error(p.peek(), "Expected ',' after hash key type")
-			return nil
-		}
-
-		valueType := p.parseType()
-		if valueType == nil {
-			return nil
-		}
-
-		if !p.match(lexer.TOKEN_GT) {
-			p.error(p.peek(), "Expected '>' after hash value type")
-			return nil
-		}
-
-		typeNode := &ast.TypeNode{
-			Kind:      ast.TypeHash,
-			Name:      "hash",
-			KeyType:   keyType,
-			ValueType: valueType,
-			Loc:       loc,
-		}
-
-		// Check for nullability marker
-		if p.match(lexer.TOKEN_BANG) {
-			// Non-nullable
-		} else if p.match(lexer.TOKEN_QUESTION) {
-			// Nullable
-		} else {
-			p.error(p.peek(), "Type must have nullability marker (! or ?)")
-		}
-
-		return typeNode
+		return p.parseHashType(loc)
 	}
 
 	// Check for enum type
 	if p.match(lexer.TOKEN_ENUM) {
-		if !p.match(lexer.TOKEN_LBRACKET) {
-			p.error(p.peek(), "Expected '[' after 'enum'")
-			return nil
-		}
-
-		enumValues := make([]string, 0)
-		for !p.check(lexer.TOKEN_RBRACKET) && !p.isAtEnd() {
-			valueToken := p.consume(lexer.TOKEN_STRING_LITERAL, "Expected string literal in enum")
-			if valueToken.Type == lexer.TOKEN_ERROR {
-				return nil
-			}
-
-			if str, ok := valueToken.Literal.(string); ok {
-				enumValues = append(enumValues, str)
-			} else {
-				enumValues = append(enumValues, valueToken.Lexeme)
-			}
-
-			if !p.check(lexer.TOKEN_RBRACKET) {
-				if !p.match(lexer.TOKEN_COMMA) {
-					p.error(p.peek(), "Expected ',' or ']' after enum value")
-					return nil
-				}
-			}
-		}
-
-		if !p.match(lexer.TOKEN_RBRACKET) {
-			p.error(p.peek(), "Expected ']' after enum values")
-			return nil
-		}
-
-		typeNode := &ast.TypeNode{
-			Kind:       ast.TypeEnum,
-			Name:       "enum",
-			EnumValues: enumValues,
-			Loc:        loc,
-		}
-
-		// Check for nullability marker
-		if p.match(lexer.TOKEN_BANG) {
-			// Non-nullable
-		} else if p.match(lexer.TOKEN_QUESTION) {
-			// Nullable
-		} else {
-			p.error(p.peek(), "Type must have nullability marker (! or ?)")
-		}
-
-		return typeNode
+		return p.parseEnumType(loc)
 	}
 
 	// Check for resource type (identifier)
 	if p.check(lexer.TOKEN_IDENTIFIER) {
-		typeToken := p.advance()
-		typeNode := &ast.TypeNode{
-			Kind: ast.TypeResource,
-			Name: typeToken.Lexeme,
-			Loc:  loc,
-		}
-
-		// Check for nullability marker
-		if p.match(lexer.TOKEN_BANG) {
-			// Non-nullable
-		} else if p.match(lexer.TOKEN_QUESTION) {
-			// Nullable
-		} else {
-			p.error(p.peek(), "Type must have nullability marker (! or ?)")
-		}
-
-		return typeNode
+		return p.parseResourceType(loc)
 	}
 
 	p.error(p.peek(), "Expected type name")
 	return nil
+}
+
+// parsePrimitiveType parses a primitive type with nullability marker
+func (p *Parser) parsePrimitiveType(loc ast.SourceLocation) *ast.TypeNode {
+	typeToken := p.advance()
+	typeNode := &ast.TypeNode{
+		Kind: ast.TypePrimitive,
+		Name: p.getTypeName(typeToken.Type),
+		Loc:  loc,
+	}
+
+	p.parseNullabilityMarker(typeNode)
+	return typeNode
+}
+
+// parseArrayType parses an array type (array<T>)
+func (p *Parser) parseArrayType(loc ast.SourceLocation) *ast.TypeNode {
+	if !p.match(lexer.TOKEN_LT) {
+		p.error(p.peek(), "Expected '<' after 'array'")
+		return nil
+	}
+
+	elementType := p.parseType()
+	if elementType == nil {
+		return nil
+	}
+
+	if !p.match(lexer.TOKEN_GT) {
+		p.error(p.peek(), "Expected '>' after array element type")
+		return nil
+	}
+
+	typeNode := &ast.TypeNode{
+		Kind:        ast.TypeArray,
+		Name:        "array",
+		ElementType: elementType,
+		Loc:         loc,
+	}
+
+	p.parseNullabilityMarker(typeNode)
+	return typeNode
+}
+
+// parseHashType parses a hash type (hash<K, V>)
+func (p *Parser) parseHashType(loc ast.SourceLocation) *ast.TypeNode {
+	if !p.match(lexer.TOKEN_LT) {
+		p.error(p.peek(), "Expected '<' after 'hash'")
+		return nil
+	}
+
+	keyType := p.parseType()
+	if keyType == nil {
+		return nil
+	}
+
+	if !p.match(lexer.TOKEN_COMMA) {
+		p.error(p.peek(), "Expected ',' after hash key type")
+		return nil
+	}
+
+	valueType := p.parseType()
+	if valueType == nil {
+		return nil
+	}
+
+	if !p.match(lexer.TOKEN_GT) {
+		p.error(p.peek(), "Expected '>' after hash value type")
+		return nil
+	}
+
+	typeNode := &ast.TypeNode{
+		Kind:      ast.TypeHash,
+		Name:      "hash",
+		KeyType:   keyType,
+		ValueType: valueType,
+		Loc:       loc,
+	}
+
+	p.parseNullabilityMarker(typeNode)
+	return typeNode
+}
+
+// parseEnumType parses an enum type (enum["value1", "value2"])
+func (p *Parser) parseEnumType(loc ast.SourceLocation) *ast.TypeNode {
+	if !p.match(lexer.TOKEN_LBRACKET) {
+		p.error(p.peek(), "Expected '[' after 'enum'")
+		return nil
+	}
+
+	enumValues := make([]string, 0)
+	for !p.check(lexer.TOKEN_RBRACKET) && !p.isAtEnd() {
+		valueToken := p.consume(lexer.TOKEN_STRING_LITERAL, "Expected string literal in enum")
+		if valueToken.Type == lexer.TOKEN_ERROR {
+			return nil
+		}
+
+		if str, ok := valueToken.Literal.(string); ok {
+			enumValues = append(enumValues, str)
+		} else {
+			enumValues = append(enumValues, valueToken.Lexeme)
+		}
+
+		if !p.check(lexer.TOKEN_RBRACKET) {
+			if !p.match(lexer.TOKEN_COMMA) {
+				p.error(p.peek(), "Expected ',' or ']' after enum value")
+				return nil
+			}
+		}
+	}
+
+	if !p.match(lexer.TOKEN_RBRACKET) {
+		p.error(p.peek(), "Expected ']' after enum values")
+		return nil
+	}
+
+	typeNode := &ast.TypeNode{
+		Kind:       ast.TypeEnum,
+		Name:       "enum",
+		EnumValues: enumValues,
+		Loc:        loc,
+	}
+
+	p.parseNullabilityMarker(typeNode)
+	return typeNode
+}
+
+// parseResourceType parses a resource type (identifier)
+func (p *Parser) parseResourceType(loc ast.SourceLocation) *ast.TypeNode {
+	typeToken := p.advance()
+	typeNode := &ast.TypeNode{
+		Kind: ast.TypeResource,
+		Name: typeToken.Lexeme,
+		Loc:  loc,
+	}
+
+	p.parseNullabilityMarker(typeNode)
+	return typeNode
+}
+
+// parseNullabilityMarker checks and sets the nullability marker (! or ?)
+func (p *Parser) parseNullabilityMarker(typeNode *ast.TypeNode) {
+	if p.match(lexer.TOKEN_BANG) {
+		typeNode.Nullable = false
+	} else if p.match(lexer.TOKEN_QUESTION) {
+		typeNode.Nullable = true
+	} else {
+		p.error(p.peek(), "Type must have nullability marker (! or ?)")
+	}
 }
 
 // parseFieldConstraint parses a field-level constraint annotation
@@ -426,9 +427,9 @@ func (p *Parser) parseFieldConstraint() *ast.ConstraintNode {
 func (p *Parser) parseHook(timingToken lexer.Token) *ast.HookNode {
 	timing := timingToken.Lexeme
 	if timingToken.Type == lexer.TOKEN_BEFORE {
-		timing = "before"
+		timing = hookTimingBefore
 	} else if timingToken.Type == lexer.TOKEN_AFTER {
-		timing = "after"
+		timing = hookTimingAfter
 	}
 
 	// Expect event (create, update, delete, save)
@@ -1189,8 +1190,8 @@ func (p *Parser) getTypeName(tokenType lexer.TokenType) string {
 // getAnnotationName maps token types to annotation names
 func (p *Parser) getAnnotationName(tokenType lexer.TokenType) string {
 	annotationNames := map[lexer.TokenType]string{
-		lexer.TOKEN_BEFORE:      "before",
-		lexer.TOKEN_AFTER:       "after",
+		lexer.TOKEN_BEFORE:      hookTimingBefore,
+		lexer.TOKEN_AFTER:       hookTimingAfter,
 		lexer.TOKEN_VALIDATE:    "validate",
 		lexer.TOKEN_CONSTRAINT:  "constraint",
 		lexer.TOKEN_SCOPE:       "scope",
