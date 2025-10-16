@@ -344,10 +344,10 @@ func TestGenerateCallExpr(t *testing.T) {
 			contains: "time.Now()",
 		},
 		{
-			name: "Logger.info",
+			name: "Logger.warn",
 			expr: &ast.CallExpr{
 				Namespace: "Logger",
-				Function:  "info",
+				Function:  "warn",
 				Arguments: []ast.ExprNode{
 					&ast.LiteralExpr{Value: "User logged in"},
 				},
