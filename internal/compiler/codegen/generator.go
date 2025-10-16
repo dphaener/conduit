@@ -47,6 +47,20 @@ func (g *Generator) GenerateProgram(prog *ast.Program) (map[string]string, error
 	}
 	files["migrations/001_init.sql"] = migrations
 
+	// Generate introspection metadata
+	metaJSON, err := g.GenerateMetadata(prog)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate metadata: %w", err)
+	}
+	files["introspection/metadata.json"] = metaJSON
+
+	// Generate metadata accessor Go file
+	metaCode, err := g.GenerateMetadataAccessor(metaJSON)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate metadata accessor: %w", err)
+	}
+	files["introspection/introspection.go"] = metaCode
+
 	return files, nil
 }
 
