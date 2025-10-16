@@ -85,7 +85,7 @@ func (p *Parser) parseResource() *ast.ResourceNode {
 		// Check for annotations
 		if p.isResourceAnnotationToken() {
 			p.parseResourceAnnotation(resource)
-		} else if p.check(lexer.TOKEN_IDENTIFIER) {
+		} else if p.isFieldNameToken() {
 			// Field or relationship
 			if field := p.parseField(); field != nil {
 				// Check if it's a relationship based on type
@@ -152,7 +152,8 @@ func (p *Parser) parseResourceAnnotation(resource *ast.ResourceNode) {
 
 // parseField parses a field declaration
 func (p *Parser) parseField() *ast.FieldNode {
-	nameToken := p.consume(lexer.TOKEN_IDENTIFIER, "Expected field name")
+	// Accept any token that can be a field name (identifiers or type keywords)
+	nameToken := p.consumeFieldName()
 	if nameToken.Type == lexer.TOKEN_ERROR {
 		p.synchronizeToNextField()
 		return nil
@@ -1157,6 +1158,21 @@ func (p *Parser) isResourceAnnotationToken() bool {
 		p.check(lexer.TOKEN_COMPUTED) ||
 		p.check(lexer.TOKEN_OPERATIONS) ||
 		p.check(lexer.TOKEN_MIDDLEWARE)
+}
+
+// isFieldNameToken checks if the current token can be used as a field name
+// Field names can be identifiers OR type keywords (like "email", "url", "phone")
+func (p *Parser) isFieldNameToken() bool {
+	return p.check(lexer.TOKEN_IDENTIFIER) || p.isPrimitiveType()
+}
+
+// consumeFieldName consumes a field name token (identifier or type keyword)
+func (p *Parser) consumeFieldName() lexer.Token {
+	if p.isFieldNameToken() {
+		return p.advance()
+	}
+	p.error(p.peek(), "Expected field name")
+	return lexer.Token{Type: lexer.TOKEN_ERROR}
 }
 
 // getTypeName maps token types to type names
