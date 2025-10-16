@@ -65,6 +65,7 @@ bower_components/
 coverage/
 *.coverprofile
 *.out
+coverage.html
 
 # Temporary files
 tmp/
