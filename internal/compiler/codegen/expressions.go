@@ -160,61 +160,305 @@ func (g *Generator) generateStdlibCall(call *ast.CallExpr) string {
 
 	// Map Conduit stdlib functions to Go implementations
 	switch fullName {
-	// String namespace
+	// ============================================================================
+	// String namespace - string manipulation functions
+	// ============================================================================
 	case "String.slugify":
-		g.imports["strings"] = true
-		g.imports["regexp"] = true
+		// Custom implementation needed for URL-safe slugs
 		return fmt.Sprintf("stdlib.StringSlugify(%s)", argsStr)
+	case "String.capitalize":
+		// Custom implementation - capitalize first letter
+		return fmt.Sprintf("stdlib.StringCapitalize(%s)", argsStr)
 	case "String.upcase":
 		g.imports["strings"] = true
 		return fmt.Sprintf("strings.ToUpper(%s)", argsStr)
 	case "String.downcase":
 		g.imports["strings"] = true
 		return fmt.Sprintf("strings.ToLower(%s)", argsStr)
+	case "String.trim":
+		g.imports["strings"] = true
+		return fmt.Sprintf("strings.TrimSpace(%s)", argsStr)
+	case "String.truncate":
+		// Custom implementation - truncate with ellipsis handling
+		return fmt.Sprintf("stdlib.StringTruncate(%s)", argsStr)
+	case "String.split":
+		g.imports["strings"] = true
+		return fmt.Sprintf("strings.Split(%s)", argsStr)
+	case "String.join":
+		g.imports["strings"] = true
+		return fmt.Sprintf("strings.Join(%s)", argsStr)
 	case "String.replace":
 		g.imports["strings"] = true
 		return fmt.Sprintf("strings.ReplaceAll(%s)", argsStr)
-	case "String.from_int":
-		g.imports["strconv"] = true
-		return fmt.Sprintf("strconv.FormatInt(%s, 10)", argsStr)
+	case "String.starts_with?":
+		g.imports["strings"] = true
+		return fmt.Sprintf("strings.HasPrefix(%s)", argsStr)
+	case "String.ends_with?":
+		g.imports["strings"] = true
+		return fmt.Sprintf("strings.HasSuffix(%s)", argsStr)
+	case "String.includes?":
+		g.imports["strings"] = true
+		return fmt.Sprintf("strings.Contains(%s)", argsStr)
 	case "String.length":
+		// Use len() for string length
 		return fmt.Sprintf("len(%s)", argsStr)
 
-	// Time namespace
+	// ============================================================================
+	// Text namespace - text processing functions
+	// ============================================================================
+	case "Text.calculate_reading_time":
+		// Custom implementation - words per minute calculation
+		return fmt.Sprintf("stdlib.TextCalculateReadingTime(%s)", argsStr)
+	case "Text.word_count":
+		// Custom implementation - count words in text
+		return fmt.Sprintf("stdlib.TextWordCount(%s)", argsStr)
+	case "Text.character_count":
+		// Use len() for character count
+		return fmt.Sprintf("len(%s)", argsStr)
+	case "Text.excerpt":
+		// Custom implementation - extract excerpt with word boundaries
+		return fmt.Sprintf("stdlib.TextExcerpt(%s)", argsStr)
+
+	// ============================================================================
+	// Number namespace - numeric operations
+	// ============================================================================
+	case "Number.format":
+		// Custom implementation - format float with decimals
+		return fmt.Sprintf("stdlib.NumberFormat(%s)", argsStr)
+	case "Number.round":
+		// Custom implementation - round to precision
+		return fmt.Sprintf("stdlib.NumberRound(%s)", argsStr)
+	case "Number.abs":
+		g.imports["math"] = true
+		return fmt.Sprintf("math.Abs(%s)", argsStr)
+	case "Number.ceil":
+		g.imports["math"] = true
+		return fmt.Sprintf("int(math.Ceil(%s))", argsStr)
+	case "Number.floor":
+		g.imports["math"] = true
+		return fmt.Sprintf("int(math.Floor(%s))", argsStr)
+	case "Number.min":
+		g.imports["math"] = true
+		return fmt.Sprintf("math.Min(%s)", argsStr)
+	case "Number.max":
+		g.imports["math"] = true
+		return fmt.Sprintf("math.Max(%s)", argsStr)
+
+	// ============================================================================
+	// Array namespace - array/slice operations
+	// ============================================================================
+	case "Array.first":
+		// Custom implementation - return first element or nil
+		return fmt.Sprintf("stdlib.ArrayFirst(%s)", argsStr)
+	case "Array.last":
+		// Custom implementation - return last element or nil
+		return fmt.Sprintf("stdlib.ArrayLast(%s)", argsStr)
+	case "Array.length":
+		// Use len() for array length
+		return fmt.Sprintf("len(%s)", argsStr)
+	case "Array.empty?":
+		// Check if length is zero
+		return fmt.Sprintf("len(%s) == 0", argsStr)
+	case "Array.includes?":
+		// Custom implementation - check if array contains element
+		return fmt.Sprintf("stdlib.ArrayIncludes(%s)", argsStr)
+	case "Array.unique":
+		// Custom implementation - remove duplicates
+		return fmt.Sprintf("stdlib.ArrayUnique(%s)", argsStr)
+	case "Array.sort":
+		// Custom implementation - sort array
+		return fmt.Sprintf("stdlib.ArraySort(%s)", argsStr)
+	case "Array.reverse":
+		// Custom implementation - reverse array
+		return fmt.Sprintf("stdlib.ArrayReverse(%s)", argsStr)
+	case "Array.push":
+		// Use append for push
+		return fmt.Sprintf("append(%s)", argsStr)
+	case "Array.concat":
+		// Use append for concatenation
+		return fmt.Sprintf("append(%s)", argsStr)
+	case "Array.map":
+		// Custom implementation - map over array with function
+		return fmt.Sprintf("stdlib.ArrayMap(%s)", argsStr)
+	case "Array.filter":
+		// Custom implementation - filter array with predicate
+		return fmt.Sprintf("stdlib.ArrayFilter(%s)", argsStr)
+	case "Array.reduce":
+		// Custom implementation - reduce array with accumulator
+		return fmt.Sprintf("stdlib.ArrayReduce(%s)", argsStr)
+	case "Array.count":
+		// Use len() for count (alias of length)
+		return fmt.Sprintf("len(%s)", argsStr)
+	case "Array.contains":
+		// Custom implementation - check if array contains element (alias of includes?)
+		return fmt.Sprintf("stdlib.ArrayIncludes(%s)", argsStr)
+
+	// ============================================================================
+	// Hash namespace - map operations
+	// ============================================================================
+	case "Hash.keys":
+		// Custom implementation - extract keys from map
+		return fmt.Sprintf("stdlib.HashKeys(%s)", argsStr)
+	case "Hash.values":
+		// Custom implementation - extract values from map
+		return fmt.Sprintf("stdlib.HashValues(%s)", argsStr)
+	case "Hash.merge":
+		// Custom implementation - merge two maps
+		return fmt.Sprintf("stdlib.HashMerge(%s)", argsStr)
+	case "Hash.has_key?":
+		// Custom implementation - check if key exists
+		return fmt.Sprintf("stdlib.HashHasKey(%s)", argsStr)
+	case "Hash.get":
+		// Custom implementation - get value with default
+		return fmt.Sprintf("stdlib.HashGet(%s)", argsStr)
+
+	// ============================================================================
+	// Time namespace - date/time operations
+	// ============================================================================
 	case "Time.now":
 		g.imports["time"] = true
 		return "time.Now()"
-	case "Time.format":
-		g.imports["time"] = true
-		return fmt.Sprintf("stdlib.TimeFormat(%s)", argsStr)
+	case "Time.today":
+		// Custom implementation - return today's date (truncated to day)
+		return "stdlib.TimeToday()"
 	case "Time.parse":
-		g.imports["time"] = true
+		// Custom implementation - parse time with optional format
 		return fmt.Sprintf("stdlib.TimeParse(%s)", argsStr)
+	case "Time.format":
+		// Custom implementation - format time to string
+		return fmt.Sprintf("stdlib.TimeFormat(%s)", argsStr)
+	case "Time.year":
+		// Extract year from time
+		return fmt.Sprintf("(%s).Year()", args[0])
+	case "Time.month":
+		// Extract month from time (as int)
+		return fmt.Sprintf("int((%s).Month())", args[0])
+	case "Time.day":
+		// Extract day from time
+		return fmt.Sprintf("(%s).Day()", args[0])
 
-	// Array namespace
-	case "Array.first":
-		return fmt.Sprintf("stdlib.ArrayFirst(%s)", argsStr)
-	case "Array.last":
-		return fmt.Sprintf("stdlib.ArrayLast(%s)", argsStr)
-	case "Array.count":
-		return fmt.Sprintf("len(%s)", argsStr)
+	// ============================================================================
+	// UUID namespace - UUID operations
+	// ============================================================================
+	case "UUID.generate":
+		// Custom implementation or use google/uuid
+		return "stdlib.UUIDGenerate()"
+	case "UUID.validate":
+		// Custom implementation - validate UUID string
+		return fmt.Sprintf("stdlib.UUIDValidate(%s)", argsStr)
+	case "UUID.parse":
+		// Custom implementation - parse UUID string (returns nil on error)
+		return fmt.Sprintf("stdlib.UUIDParse(%s)", argsStr)
 
-	// Context namespace
+	// ============================================================================
+	// Random namespace - random value generation
+	// ============================================================================
+	case "Random.int":
+		// Custom implementation - random int in range
+		return fmt.Sprintf("stdlib.RandomInt(%s)", argsStr)
+	case "Random.float":
+		// Custom implementation - random float in range
+		return fmt.Sprintf("stdlib.RandomFloat(%s)", argsStr)
+	case "Random.uuid":
+		// Same as UUID.generate
+		return "stdlib.UUIDGenerate()"
+	case "Random.hex":
+		// Custom implementation - random hex string
+		return fmt.Sprintf("stdlib.RandomHex(%s)", argsStr)
+	case "Random.alphanumeric":
+		// Custom implementation - random alphanumeric string
+		return fmt.Sprintf("stdlib.RandomAlphanumeric(%s)", argsStr)
+
+	// ============================================================================
+	// Crypto namespace - cryptographic operations
+	// ============================================================================
+	case "Crypto.hash":
+		// Custom implementation - hash data with algorithm (sha256, bcrypt, etc.)
+		return fmt.Sprintf("stdlib.CryptoHash(%s)", argsStr)
+	case "Crypto.compare":
+		// Custom implementation - constant-time comparison for hashes
+		return fmt.Sprintf("stdlib.CryptoCompare(%s)", argsStr)
+
+	// ============================================================================
+	// HTML namespace - HTML processing
+	// ============================================================================
+	case "HTML.strip_tags":
+		// Custom implementation - remove HTML tags
+		return fmt.Sprintf("stdlib.HTMLStripTags(%s)", argsStr)
+	case "HTML.escape":
+		g.imports["html"] = true
+		return fmt.Sprintf("html.EscapeString(%s)", argsStr)
+	case "HTML.unescape":
+		g.imports["html"] = true
+		return fmt.Sprintf("html.UnescapeString(%s)", argsStr)
+
+	// ============================================================================
+	// JSON namespace - JSON operations
+	// ============================================================================
+	case "JSON.parse":
+		// Custom implementation - parse JSON string
+		return fmt.Sprintf("stdlib.JSONParse(%s)", argsStr)
+	case "JSON.stringify":
+		// Custom implementation - stringify to JSON (with optional pretty)
+		return fmt.Sprintf("stdlib.JSONStringify(%s)", argsStr)
+	case "JSON.validate":
+		// Custom implementation - validate JSON string
+		return fmt.Sprintf("stdlib.JSONValidate(%s)", argsStr)
+
+	// ============================================================================
+	// Regex namespace - regular expression operations
+	// ============================================================================
+	case "Regex.match":
+		// Custom implementation - find regex matches
+		return fmt.Sprintf("stdlib.RegexMatch(%s)", argsStr)
+	case "Regex.replace":
+		// Custom implementation - regex replace
+		return fmt.Sprintf("stdlib.RegexReplace(%s)", argsStr)
+	case "Regex.test":
+		// Custom implementation - test if regex matches
+		return fmt.Sprintf("stdlib.RegexTest(%s)", argsStr)
+	case "Regex.split":
+		// Custom implementation - split by regex pattern
+		return fmt.Sprintf("stdlib.RegexSplit(%s)", argsStr)
+
+	// ============================================================================
+	// Logger namespace - logging operations
+	// ============================================================================
+	case "Logger.warn":
+		g.imports["log"] = true
+		return fmt.Sprintf("log.Printf(\"WARN: %%s\", %s)", argsStr)
+	case "Logger.debug":
+		g.imports["log"] = true
+		return fmt.Sprintf("log.Printf(\"DEBUG: %%s\", %s)", argsStr)
+
+	// ============================================================================
+	// Context namespace - request context operations
+	// ============================================================================
 	case "Context.current_user":
+		// Custom implementation - extract current user from context
 		return "stdlib.ContextCurrentUser(ctx)"
+	case "Context.authenticated?":
+		// Custom implementation - check if user is authenticated
+		return "stdlib.ContextAuthenticated(ctx)"
+	case "Context.headers":
+		// Custom implementation - extract request headers from context
+		return "stdlib.ContextHeaders(ctx)"
 	case "Context.request_id":
+		// Custom implementation - extract request ID from context
 		return "stdlib.ContextRequestID(ctx)"
 
-	// Logger namespace
-	case "Logger.info":
-		g.imports["log"] = true
-		return fmt.Sprintf("log.Printf(\"INFO: \" + %s)", argsStr)
-	case "Logger.error":
-		g.imports["log"] = true
-		return fmt.Sprintf("log.Printf(\"ERROR: \" + %s)", argsStr)
+	// ============================================================================
+	// Env namespace - environment variable operations
+	// ============================================================================
+	case "Env.get":
+		// Custom implementation - get env var with optional default
+		return fmt.Sprintf("stdlib.EnvGet(%s)", argsStr)
+	case "Env.has?":
+		// Custom implementation - check if env var exists
+		return fmt.Sprintf("stdlib.EnvHas(%s)", argsStr)
 
 	default:
-		// Unknown stdlib function
+		// Unknown stdlib function - generate fallback
 		return fmt.Sprintf("stdlib.%s_%s(%s)", call.Namespace, call.Function, argsStr)
 	}
 }

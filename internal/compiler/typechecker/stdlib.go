@@ -321,6 +321,51 @@ var StdlibFunctions = map[string]map[string]*Function{
 			},
 			ReturnType: NewArrayType(NewPrimitiveType("any", false), false),
 		},
+		"map": {
+			Name:      "map",
+			Namespace: "Array",
+			Parameters: []FunctionParam{
+				{Name: "arr", Type: NewArrayType(NewPrimitiveType("any", false), false)},
+				{Name: "fn", Type: NewPrimitiveType("any", false)},
+			},
+			ReturnType: NewArrayType(NewPrimitiveType("any", false), false),
+		},
+		"filter": {
+			Name:      "filter",
+			Namespace: "Array",
+			Parameters: []FunctionParam{
+				{Name: "arr", Type: NewArrayType(NewPrimitiveType("any", false), false)},
+				{Name: "fn", Type: NewPrimitiveType("any", false)},
+			},
+			ReturnType: NewArrayType(NewPrimitiveType("any", false), false),
+		},
+		"reduce": {
+			Name:      "reduce",
+			Namespace: "Array",
+			Parameters: []FunctionParam{
+				{Name: "arr", Type: NewArrayType(NewPrimitiveType("any", false), false)},
+				{Name: "initial", Type: NewPrimitiveType("any", false)},
+				{Name: "fn", Type: NewPrimitiveType("any", false)},
+			},
+			ReturnType: NewPrimitiveType("any", false),
+		},
+		"count": {
+			Name:      "count",
+			Namespace: "Array",
+			Parameters: []FunctionParam{
+				{Name: "arr", Type: NewArrayType(NewPrimitiveType("any", false), false)},
+			},
+			ReturnType: NewPrimitiveType("int", false),
+		},
+		"contains": {
+			Name:      "contains",
+			Namespace: "Array",
+			Parameters: []FunctionParam{
+				{Name: "arr", Type: NewArrayType(NewPrimitiveType("any", false), false)},
+				{Name: "item", Type: NewPrimitiveType("any", false)},
+			},
+			ReturnType: NewPrimitiveType("bool", false),
+		},
 	},
 	"Hash": {
 		"keys": {
@@ -602,6 +647,24 @@ var StdlibFunctions = map[string]map[string]*Function{
 			ReturnType: NewArrayType(NewPrimitiveType("string", false), false),
 		},
 	},
+	"Logger": {
+		"warn": {
+			Name:      "warn",
+			Namespace: "Logger",
+			Parameters: []FunctionParam{
+				{Name: "message", Type: NewPrimitiveType("string", false)},
+			},
+			ReturnType: NewPrimitiveType("void", false),
+		},
+		"debug": {
+			Name:      "debug",
+			Namespace: "Logger",
+			Parameters: []FunctionParam{
+				{Name: "message", Type: NewPrimitiveType("string", false)},
+			},
+			ReturnType: NewPrimitiveType("void", false),
+		},
+	},
 	"Context": {
 		"current_user": {
 			Name:       "current_user",
@@ -614,6 +677,18 @@ var StdlibFunctions = map[string]map[string]*Function{
 			Namespace:  "Context",
 			Parameters: []FunctionParam{},
 			ReturnType: NewPrimitiveType("bool", false),
+		},
+		"headers": {
+			Name:       "headers",
+			Namespace:  "Context",
+			Parameters: []FunctionParam{},
+			ReturnType: NewHashType(NewPrimitiveType("string", false), NewPrimitiveType("string", false), true),
+		},
+		"request_id": {
+			Name:       "request_id",
+			Namespace:  "Context",
+			Parameters: []FunctionParam{},
+			ReturnType: NewPrimitiveType("string", false),
 		},
 	},
 	"Env": {
