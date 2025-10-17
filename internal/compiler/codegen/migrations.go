@@ -49,20 +49,15 @@ func (g *Generator) generateCreateTable(resource *ast.ResourceNode) (string, err
 		}
 	}
 
-	// Add ID column if not explicitly defined
+	// Add default ID only if not explicitly defined
 	if !hasID {
 		sql.WriteString("  id BIGSERIAL PRIMARY KEY")
 	}
 
-	// Generate columns
+	// Generate all explicitly defined fields
 	for i, field := range resource.Fields {
-		if hasID && i == 0 && field.Name == "id" {
-			continue // Skip if we already added default ID
-		}
-
-		// Add comma before this field if we've already added any columns
-		// (either the default ID when !hasID, or previous fields when i > 0)
-		if !hasID || i > 0 {
+		// Add comma before this field if we've already written any columns
+		if i > 0 || !hasID {
 			sql.WriteString(",\n")
 		}
 
@@ -154,6 +149,9 @@ func (g *Generator) toSQLType(field *ast.FieldNode) (string, error) {
 func (g *Generator) generateSQLConstraints(field *ast.FieldNode) string {
 	var constraints []string
 
+	// Automatically make 'id' fields PRIMARY KEY
+	isPrimaryKey := field.Name == "id"
+
 	// NOT NULL for required fields
 	if !field.Nullable {
 		constraints = append(constraints, "NOT NULL")
@@ -163,7 +161,7 @@ func (g *Generator) generateSQLConstraints(field *ast.FieldNode) string {
 	for _, constraint := range field.Constraints {
 		switch constraint.Name {
 		case "primary":
-			constraints = append(constraints, "PRIMARY KEY")
+			isPrimaryKey = true
 
 		case "unique":
 			constraints = append(constraints, "UNIQUE")
@@ -198,6 +196,11 @@ func (g *Generator) generateSQLConstraints(field *ast.FieldNode) string {
 				}
 			}
 		}
+	}
+
+	// Add PRIMARY KEY constraint if this field is a primary key
+	if isPrimaryKey {
+		constraints = append(constraints, "PRIMARY KEY")
 	}
 
 	// Add DEFAULT constraint if specified

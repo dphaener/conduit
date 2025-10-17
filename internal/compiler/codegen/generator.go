@@ -30,15 +30,29 @@ func NewGenerator() *Generator {
 func (g *Generator) GenerateProgram(prog *ast.Program) (map[string]string, error) {
 	files := make(map[string]string)
 
-	// Generate models for each resource
+	// Generate models for each resource (including hooks)
 	for _, resource := range prog.Resources {
-		code, err := g.GenerateResource(resource)
+		code, err := g.GenerateResourceWithHooks(resource)
 		if err != nil {
 			return nil, fmt.Errorf("failed to generate resource %s: %w", resource.Name, err)
 		}
 		filename := fmt.Sprintf("models/%s.go", strings.ToLower(resource.Name))
 		files[filename] = code
 	}
+
+	// Generate HTTP handlers
+	handlers, err := g.GenerateHandlers(prog.Resources)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate handlers: %w", err)
+	}
+	files["handlers/handlers.go"] = handlers
+
+	// Generate main entry point
+	mainCode, err := g.GenerateMain(prog.Resources)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate main: %w", err)
+	}
+	files["main.go"] = mainCode
 
 	// Generate migrations
 	migrations, err := g.GenerateMigrations(prog.Resources)
@@ -62,6 +76,25 @@ func (g *Generator) GenerateProgram(prog *ast.Program) (map[string]string, error
 	files["introspection/introspection.go"] = metaCode
 
 	return files, nil
+}
+
+// GenerateResourceWithHooks generates a resource with lifecycle hooks
+func (g *Generator) GenerateResourceWithHooks(resource *ast.ResourceNode) (string, error) {
+	// First generate the base resource (struct, table name, validate, CRUD)
+	baseCode, err := g.GenerateResource(resource)
+	if err != nil {
+		return "", err
+	}
+
+	// If there are no hooks, return base code
+	if len(resource.Hooks) == 0 {
+		return baseCode, nil
+	}
+
+	// Append hooks
+	hooksCode := g.generateHooks(resource)
+
+	return baseCode + "\n" + hooksCode, nil
 }
 
 // GenerateResource generates Go code for a single resource
@@ -197,7 +230,10 @@ func (g *Generator) writeImports() {
 	var externalImports []string
 
 	for imp := range g.imports {
-		if strings.Contains(imp, ".") {
+		// Check if it's a blank import (starts with underscore and space)
+		if strings.HasPrefix(imp, "_ ") {
+			externalImports = append(externalImports, imp)
+		} else if strings.Contains(imp, ".") {
 			externalImports = append(externalImports, imp)
 		} else {
 			stdlibImports = append(stdlibImports, imp)
@@ -216,7 +252,14 @@ func (g *Generator) writeImports() {
 
 	// Write external imports
 	for _, imp := range sortStrings(externalImports) {
-		g.writeLine("%q", imp)
+		// Handle blank imports (underscore imports)
+		if strings.HasPrefix(imp, "_ ") {
+			// Remove the "_ " prefix and quote the actual import
+			actualImp := strings.TrimPrefix(imp, "_ ")
+			g.writeLine("_ %q", actualImp)
+		} else {
+			g.writeLine("%q", imp)
+		}
 	}
 
 	g.indent--
