@@ -1,0 +1,21 @@
+/// Sample Post resource for blog application
+resource Post {
+  id: uuid! @primary @auto
+  title: string! @min(5) @max(200)
+  slug: string! @unique
+  content: text! @min(100)
+  published: bool! @default(false)
+  created_at: timestamp! @auto
+  updated_at: timestamp! @auto_update
+
+  @before create {
+    self.slug = String.slugify(self.title)
+  }
+
+  @constraint published_requires_content {
+    on: [create, update]
+    when: self.published == true
+    condition: String.length(self.content) >= 500
+    error: "Published posts must have at least 500 characters"
+  }
+}
