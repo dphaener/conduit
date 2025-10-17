@@ -348,7 +348,8 @@ func (l *Lexer) scanIdentifier() {
 	}
 
 	// Not a keyword - check if identifier ends with ? (for predicates like empty?, exists?)
-	if l.peek() == '?' {
+	// But NOT if it's followed by . (that would be safe navigation ?.)
+	if l.peek() == '?' && l.peekNext() != '.' {
 		l.advance()
 		lexeme = string(l.source[l.start:l.current])
 	}
