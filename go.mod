@@ -3,6 +3,7 @@ module github.com/conduit-lang/conduit
 go 1.23.1
 
 require (
+	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.7.2
 	github.com/spf13/cobra v1.10.1
 )

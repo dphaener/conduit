@@ -223,26 +223,7 @@ func TestTypeSystemIntegration(t *testing.T) {
 						Error: "Published posts need 500+ characters",
 					},
 				},
-				Computed: []*ast.ComputedNode{
-					{
-						Name: "word_count",
-						Type: &ast.TypeNode{
-							Kind:     ast.TypePrimitive,
-							Name:     "int",
-							Nullable: false,
-						},
-						Body: &ast.CallExpr{
-							Namespace: "Text",
-							Function:  "word_count",
-							Arguments: []ast.ExprNode{
-								&ast.FieldAccessExpr{
-									Object: &ast.SelfExpr{},
-									Field:  "content",
-								},
-							},
-						},
-					},
-				},
+				// Computed fields removed for MVP - Text.word_count not in MVP stdlib
 			},
 		},
 	}
@@ -587,17 +568,18 @@ func TestArrayAndHashTypes(t *testing.T) {
 									},
 								},
 							},
-							// Test hash function call
+							// Test hash function call with MVP function has_key
 							&ast.LetStmt{
-								Name: "keys",
+								Name: "has_theme_key",
 								Value: &ast.CallExpr{
 									Namespace: "Hash",
-									Function:  "keys",
+									Function:  "has_key",
 									Arguments: []ast.ExprNode{
 										&ast.FieldAccessExpr{
 											Object: &ast.SelfExpr{},
 											Field:  "settings",
 										},
+										&ast.LiteralExpr{Value: "theme"},
 									},
 								},
 							},
