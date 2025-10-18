@@ -328,7 +328,7 @@ func Example_workflow() {
 	fmt.Printf("Patterns: %d\n", len(meta.Patterns))
 
 	// Output:
-	// Generated 4 files
+	// Generated 6 files
 	// Resources: 1
 	// Patterns: 0
 }
