@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/conduit-lang/conduit/internal/orm/schema"
+	"github.com/conduit-lang/conduit/internal/orm/tracking"
 )
 
 // Update updates a record by its primary key with optimistic locking support
@@ -73,7 +74,7 @@ func (o *Operations) updateInTx(
 	record := o.mergeChanges(existing, data)
 
 	// 4. Set up change tracking
-	changeTracker := NewChangeTracker(existing, record)
+	changeTracker := tracking.NewChangeTracker(existing, record)
 	record["__changes__"] = changeTracker
 
 	// 5. Auto-populate fields like updated_at
@@ -254,12 +255,25 @@ func (o *Operations) updateRecord(
 ) (map[string]interface{}, error) {
 	tableName := toTableName(o.resource.Name)
 
+	// Use change tracking to only update changed fields
+	var fieldsToUpdate map[string]interface{}
+	if changeTracker, ok := data["__changes__"].(*tracking.ChangeTracker); ok {
+		fieldsToUpdate = changeTracker.GetChangedData()
+		// Add updated_at if present
+		if _, hasUpdatedAt := data["updated_at"]; hasUpdatedAt {
+			fieldsToUpdate["updated_at"] = data["updated_at"]
+		}
+	} else {
+		// Fallback: update all fields if no change tracker
+		fieldsToUpdate = data
+	}
+
 	// Build UPDATE statement
 	var sets []string
 	var values []interface{}
 	counter := 1
 
-	for field, value := range data {
+	for field, value := range fieldsToUpdate {
 		if field == "id" || field == "created_at" || field == "__changes__" {
 			continue // Skip immutable fields and internal tracking
 		}
@@ -272,7 +286,7 @@ func (o *Operations) updateRecord(
 	}
 
 	if len(sets) == 0 {
-		// No changes, return existing record
+		// No changes, return existing record without hitting the database
 		return existing, nil
 	}
 
@@ -369,46 +383,4 @@ func (o *Operations) mergeChanges(
 	}
 
 	return result
-}
-
-// ChangeTracker tracks field changes in a record
-type ChangeTracker struct {
-	before map[string]interface{}
-	after  map[string]interface{}
-}
-
-// NewChangeTracker creates a new change tracker
-func NewChangeTracker(before, after map[string]interface{}) *ChangeTracker {
-	return &ChangeTracker{
-		before: before,
-		after:  after,
-	}
-}
-
-// Changed returns true if the field changed
-func (ct *ChangeTracker) Changed(field string) bool {
-	beforeVal, beforeOk := ct.before[field]
-	afterVal, afterOk := ct.after[field]
-
-	if beforeOk != afterOk {
-		return true
-	}
-
-	return beforeVal != afterVal
-}
-
-// WasChanged returns the list of changed fields
-func (ct *ChangeTracker) WasChanged() []string {
-	var changed []string
-	for field := range ct.after {
-		if ct.Changed(field) {
-			changed = append(changed, field)
-		}
-	}
-	return changed
-}
-
-// PreviousValue returns the previous value of a field
-func (ct *ChangeTracker) PreviousValue(field string) interface{} {
-	return ct.before[field]
 }
