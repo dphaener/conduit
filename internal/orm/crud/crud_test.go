@@ -8,6 +8,7 @@ import (
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/conduit-lang/conduit/internal/orm/schema"
+	"github.com/conduit-lang/conduit/internal/orm/tracking"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -257,9 +258,9 @@ func TestUpdate(t *testing.T) {
 		WillReturnRows(sqlmock.NewRows([]string{"content", "created_at", "id", "title", "updated_at"}).
 			AddRow("Old content", now, testID, "Old Title", now))
 
-	// Expect UPDATE - use AnyArg since map iteration order is random (alphabetically sorted columns)
+	// Expect UPDATE - change tracking only updates changed fields (title + updated_at + id)
 	mock.ExpectQuery(`UPDATE posts SET`).
-		WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg()).
+		WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg()).
 		WillReturnRows(sqlmock.NewRows([]string{"content", "created_at", "id", "title", "updated_at"}).
 			AddRow("Old content", now, testID, "New Title", time.Now()))
 
@@ -455,7 +456,7 @@ func TestChangeTracker(t *testing.T) {
 		"status":  "published",
 	}
 
-	tracker := NewChangeTracker(before, after)
+	tracker := tracking.NewChangeTracker(before, after)
 
 	assert.True(t, tracker.Changed("title"))
 	assert.False(t, tracker.Changed("content"))
@@ -464,7 +465,7 @@ func TestChangeTracker(t *testing.T) {
 	assert.Equal(t, "Old Title", tracker.PreviousValue("title"))
 	assert.Equal(t, "draft", tracker.PreviousValue("status"))
 
-	changed := tracker.WasChanged()
+	changed := tracker.ChangedFields()
 	assert.Contains(t, changed, "title")
 	assert.Contains(t, changed, "status")
 	assert.NotContains(t, changed, "content")
