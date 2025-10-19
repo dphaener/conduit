@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/conduit-lang/conduit/internal/web/middleware"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -13,6 +14,9 @@ type Router struct {
 	mux    chi.Router
 	routes map[string]*Route
 	groups map[string]*RouteGroup
+
+	// Middleware chain
+	chain *middleware.Chain
 
 	// For introspection and debugging
 	registeredRoutes []*RouteInfo
@@ -127,6 +131,7 @@ func NewRouter() *Router {
 		mux:              chi.NewRouter(),
 		routes:           make(map[string]*Route),
 		groups:           make(map[string]*RouteGroup),
+		chain:            middleware.NewChain(),
 		registeredRoutes: make([]*RouteInfo, 0),
 	}
 }
@@ -134,6 +139,17 @@ func NewRouter() *Router {
 // ServeHTTP implements http.Handler interface
 func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	r.mux.ServeHTTP(w, req)
+}
+
+// Use adds middleware to the router's middleware chain
+func (r *Router) Use(middlewares ...middleware.Middleware) {
+	for _, m := range middlewares {
+		r.chain.Use(m)
+		// Also register with chi for proper execution
+		r.mux.Use(func(next http.Handler) http.Handler {
+			return m(next)
+		})
+	}
 }
 
 // Get registers a GET route
