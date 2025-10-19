@@ -74,16 +74,26 @@ func RecoveryWithConfig(config RecoveryConfig) Middleware {
 
 // defaultRecoveryResponse sends a default JSON error response
 func defaultRecoveryResponse(w http.ResponseWriter, r *http.Request, err interface{}) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusInternalServerError)
-	if encErr := json.NewEncoder(w).Encode(map[string]interface{}{
+	// Prepare response payload
+	response := map[string]interface{}{
 		"error":   "internal_server_error",
 		"message": "An unexpected error occurred",
-	}); encErr != nil {
+	}
+
+	// Attempt to marshal JSON first
+	jsonData, encErr := json.Marshal(response)
+	if encErr != nil {
 		// Fallback to plain text if JSON encoding fails
 		w.Header().Set("Content-Type", "text/plain")
+		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte("Internal Server Error"))
+		return
 	}
+
+	// JSON encoding succeeded, send JSON response
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusInternalServerError)
+	w.Write(jsonData)
 }
 
 // panicError wraps a panic value as an error
