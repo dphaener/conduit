@@ -10,11 +10,18 @@ import (
 	"github.com/conduit-lang/conduit/internal/orm/schema"
 )
 
+// RelationshipLoader is an interface for loading relationships
+// This avoids circular dependencies between query and relationships packages
+type RelationshipLoader interface {
+	EagerLoad(ctx context.Context, records []map[string]interface{}, resource *schema.ResourceSchema, includes []string) error
+}
+
 // QueryBuilder provides a fluent API for building SQL queries
 type QueryBuilder struct {
 	resource     *schema.ResourceSchema
 	db           *sql.DB
 	schemas      map[string]*schema.ResourceSchema
+	loader       RelationshipLoader // Optional relationship loader
 
 	conditions   []*Condition
 	joins        []*Join
@@ -68,6 +75,7 @@ func NewQueryBuilder(resource *schema.ResourceSchema, db *sql.DB, schemas map[st
 		resource:     resource,
 		db:           db,
 		schemas:      schemas,
+		loader:       nil, // Set via WithLoader() if needed
 		conditions:   make([]*Condition, 0),
 		joins:        make([]*Join, 0),
 		orderBy:      make([]string, 0),
@@ -78,6 +86,12 @@ func NewQueryBuilder(resource *schema.ResourceSchema, db *sql.DB, schemas map[st
 		paramCounter: 1,
 		args:         make([]interface{}, 0),
 	}
+}
+
+// WithLoader sets the relationship loader for eager loading
+func (qb *QueryBuilder) WithLoader(loader RelationshipLoader) *QueryBuilder {
+	qb.loader = loader
+	return qb
 }
 
 // Where adds a WHERE condition to the query
@@ -416,7 +430,30 @@ func (qb *QueryBuilder) All(ctx context.Context) ([]map[string]interface{}, erro
 		return nil, fmt.Errorf("failed to scan rows: %w", err)
 	}
 
+	// Eager load relationships if any were specified
+	if len(qb.includes) > 0 && len(results) > 0 {
+		if err := qb.loadRelationships(ctx, results); err != nil {
+			return nil, fmt.Errorf("failed to load relationships: %w", err)
+		}
+	}
+
 	return results, nil
+}
+
+// loadRelationships loads the specified relationships for the given records
+func (qb *QueryBuilder) loadRelationships(ctx context.Context, records []map[string]interface{}) error {
+	if len(qb.includes) == 0 || len(records) == 0 {
+		return nil
+	}
+
+	// If no loader is configured, skip relationship loading
+	// This happens in tests or when the QueryBuilder is used standalone
+	if qb.loader == nil {
+		return nil
+	}
+
+	// Delegate to the relationship loader
+	return qb.loader.EagerLoad(ctx, records, qb.resource, qb.includes)
 }
 
 // First executes the query and returns the first matching row
@@ -509,6 +546,7 @@ func (qb *QueryBuilder) Clone() *QueryBuilder {
 		resource:     qb.resource,
 		db:           qb.db,
 		schemas:      qb.schemas,
+		loader:       qb.loader, // Share the same loader
 		conditions:   make([]*Condition, len(qb.conditions)),
 		joins:        make([]*Join, len(qb.joins)),
 		orderBy:      make([]string, len(qb.orderBy)),
