@@ -1,11 +1,12 @@
 package middleware
 
 import (
-	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	webcontext "github.com/conduit-lang/conduit/internal/web/context"
 )
 
 func TestLoggingMiddleware(t *testing.T) {
@@ -26,7 +27,7 @@ func TestLoggingMiddleware(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "/test", nil)
 	// Add request ID to context
-	ctx := context.WithValue(req.Context(), RequestIDKey, "test-request-id")
+	ctx := webcontext.SetRequestID(req.Context(), "test-request-id")
 	req = req.WithContext(ctx)
 
 	rec := httptest.NewRecorder()
@@ -122,7 +123,7 @@ func TestLoggingDefaultLogger(t *testing.T) {
 	wrapped := middleware(handler)
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	ctx := context.WithValue(req.Context(), RequestIDKey, "test-id")
+	ctx := webcontext.SetRequestID(req.Context(), "test-id")
 	req = req.WithContext(ctx)
 
 	rec := httptest.NewRecorder()

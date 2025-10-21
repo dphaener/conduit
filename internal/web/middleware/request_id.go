@@ -5,14 +5,8 @@ import (
 	"net/http"
 
 	"github.com/google/uuid"
-)
 
-// ContextKey is a custom type for context keys to avoid collisions
-type ContextKey string
-
-const (
-	// RequestIDKey is the context key for request IDs
-	RequestIDKey ContextKey = "request_id"
+	webcontext "github.com/conduit-lang/conduit/internal/web/context"
 )
 
 // RequestIDConfig holds configuration for the request ID middleware
@@ -48,7 +42,7 @@ func RequestIDWithConfig(config RequestIDConfig) Middleware {
 			}
 
 			// Add request ID to context
-			ctx := context.WithValue(r.Context(), RequestIDKey, requestID)
+			ctx := webcontext.SetRequestID(r.Context(), requestID)
 			r = r.WithContext(ctx)
 
 			// Add request ID to response header
@@ -61,10 +55,7 @@ func RequestIDWithConfig(config RequestIDConfig) Middleware {
 
 // GetRequestID extracts the request ID from the context
 func GetRequestID(ctx context.Context) string {
-	if requestID, ok := ctx.Value(RequestIDKey).(string); ok {
-		return requestID
-	}
-	return ""
+	return webcontext.GetRequestID(ctx)
 }
 
 // defaultRequestIDGenerator generates a UUID v4 request ID
