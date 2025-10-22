@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Conduit WebSocket Test Client</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+
+        .container {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+
+        h1 {
+            color: #333;
+            margin-top: 0;
+        }
+
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            font-weight: bold;
+        }
+
+        .status.connected {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status.disconnected {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .controls {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            background: #007bff;
+            color: white;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        button:hover {
+            background: #0056b3;
+        }
+
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            box-sizing: border-box;
+        }
+
+        .message-form {
+            display: grid;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        #messages {
+            height: 400px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 10px;
+            background: #fafafa;
+        }
+
+        .message {
+            padding: 8px;
+            margin-bottom: 8px;
+            border-radius: 4px;
+            background: white;
+            border-left: 3px solid #007bff;
+        }
+
+        .message.sent {
+            border-left-color: #28a745;
+        }
+
+        .message.received {
+            border-left-color: #007bff;
+        }
+
+        .message.error {
+            border-left-color: #dc3545;
+        }
+
+        .timestamp {
+            font-size: 11px;
+            color: #666;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .stat {
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 4px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #007bff;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: #666;
+            text-transform: uppercase;
+        }
+    </style>
+</head>
+<body>
+    <h1>🚀 Conduit WebSocket Test Client</h1>
+
+    <div class="container">
+        <div id="status" class="status disconnected">Disconnected</div>
+
+        <div class="controls">
+            <button id="connect" onclick="connect()">Connect</button>
+            <button id="disconnect" onclick="disconnect()" disabled>Disconnect</button>
+        </div>
+
+        <div>
+            <label>WebSocket URL:</label>
+            <input type="text" id="wsUrl" value="ws://localhost:8080/ws" />
+        </div>
+    </div>
+
+    <div class="container">
+        <h2>Send Message</h2>
+
+        <div class="message-form">
+            <div>
+                <label>Message Type:</label>
+                <select id="messageType">
+                    <option value="ping">Ping</option>
+                    <option value="echo">Echo</option>
+                    <option value="status">Status</option>
+                    <option value="join_room">Join Room</option>
+                    <option value="leave_room">Leave Room</option>
+                    <option value="broadcast">Broadcast</option>
+                    <option value="custom">Custom</option>
+                </select>
+            </div>
+
+            <div id="roomField" style="display: none;">
+                <label>Room Name:</label>
+                <input type="text" id="roomName" placeholder="room-name" />
+            </div>
+
+            <div>
+                <label>Message Data (JSON):</label>
+                <textarea id="messageData" rows="4" style="width: 100%; padding: 10px; border-radius: 4px; border: 1px solid #ddd;">{"message": "Hello, WebSocket!"}</textarea>
+            </div>
+
+            <button onclick="sendMessage()">Send Message</button>
+        </div>
+    </div>
+
+    <div class="container">
+        <h2>Messages</h2>
+        <div id="messages"></div>
+        <button onclick="clearMessages()" style="margin-top: 10px;">Clear Messages</button>
+    </div>
+
+    <div class="container">
+        <h2>Statistics</h2>
+        <div class="stats">
+            <div class="stat">
+                <div class="stat-value" id="messagesSent">0</div>
+                <div class="stat-label">Sent</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value" id="messagesReceived">0</div>
+                <div class="stat-label">Received</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value" id="connectionTime">0s</div>
+                <div class="stat-label">Connected</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value" id="latency">-</div>
+                <div class="stat-label">Latency</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let ws = null;
+        let messagesSent = 0;
+        let messagesReceived = 0;
+        let connectionStartTime = null;
+        let pingStartTime = null;
+
+        const messageTypeSelect = document.getElementById('messageType');
+        const roomField = document.getElementById('roomField');
+
+        messageTypeSelect.addEventListener('change', function() {
+            const showRoom = ['join_room', 'leave_room', 'broadcast'].includes(this.value);
+            roomField.style.display = showRoom ? 'block' : 'none';
+        });
+
+        function connect() {
+            const url = document.getElementById('wsUrl').value;
+
+            try {
+                ws = new WebSocket(url);
+
+                ws.onopen = function() {
+                    updateStatus(true);
+                    connectionStartTime = Date.now();
+                    addMessage('Connected to ' + url, 'system');
+                    startConnectionTimer();
+                };
+
+                ws.onmessage = function(event) {
+                    messagesReceived++;
+                    updateStats();
+
+                    try {
+                        const message = JSON.parse(event.data);
+                        addMessage('Received: ' + JSON.stringify(message, null, 2), 'received');
+
+                        // Calculate latency for pong messages
+                        if (message.type === 'pong' && pingStartTime) {
+                            const latency = Date.now() - pingStartTime;
+                            document.getElementById('latency').textContent = latency + 'ms';
+                            pingStartTime = null;
+                        }
+                    } catch (e) {
+                        addMessage('Received (raw): ' + event.data, 'received');
+                    }
+                };
+
+                ws.onerror = function(error) {
+                    addMessage('Error: ' + error, 'error');
+                };
+
+                ws.onclose = function() {
+                    updateStatus(false);
+                    addMessage('Disconnected', 'system');
+                    connectionStartTime = null;
+                };
+
+            } catch (error) {
+                addMessage('Connection error: ' + error.message, 'error');
+            }
+        }
+
+        function disconnect() {
+            if (ws) {
+                ws.close();
+                ws = null;
+            }
+        }
+
+        function sendMessage() {
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                addMessage('Not connected', 'error');
+                return;
+            }
+
+            const type = document.getElementById('messageType').value;
+            let data;
+
+            try {
+                data = JSON.parse(document.getElementById('messageData').value);
+            } catch (e) {
+                addMessage('Invalid JSON: ' + e.message, 'error');
+                return;
+            }
+
+            let message = { type: type, data: data };
+
+            // Handle special message types
+            if (type === 'join_room' || type === 'leave_room') {
+                const room = document.getElementById('roomName').value;
+                message.data = { room: room };
+            } else if (type === 'broadcast') {
+                const room = document.getElementById('roomName').value;
+                message.data = {
+                    room: room || undefined,
+                    type: 'notification',
+                    payload: data
+                };
+            } else if (type === 'ping') {
+                message.data = new Date().toISOString();
+                pingStartTime = Date.now();
+            }
+
+            try {
+                ws.send(JSON.stringify(message));
+                messagesSent++;
+                updateStats();
+                addMessage('Sent: ' + JSON.stringify(message, null, 2), 'sent');
+            } catch (error) {
+                addMessage('Send error: ' + error.message, 'error');
+            }
+        }
+
+        function updateStatus(connected) {
+            const statusEl = document.getElementById('status');
+            const connectBtn = document.getElementById('connect');
+            const disconnectBtn = document.getElementById('disconnect');
+
+            if (connected) {
+                statusEl.className = 'status connected';
+                statusEl.textContent = 'Connected';
+                connectBtn.disabled = true;
+                disconnectBtn.disabled = false;
+            } else {
+                statusEl.className = 'status disconnected';
+                statusEl.textContent = 'Disconnected';
+                connectBtn.disabled = false;
+                disconnectBtn.disabled = true;
+            }
+        }
+
+        function addMessage(text, type) {
+            const messagesEl = document.getElementById('messages');
+            const messageEl = document.createElement('div');
+            messageEl.className = 'message ' + type;
+
+            const timestamp = new Date().toLocaleTimeString();
+            messageEl.innerHTML = `
+                <div class="timestamp">${timestamp}</div>
+                <pre style="margin: 5px 0 0 0; white-space: pre-wrap;">${text}</pre>
+            `;
+
+            messagesEl.appendChild(messageEl);
+            messagesEl.scrollTop = messagesEl.scrollHeight;
+        }
+
+        function clearMessages() {
+            document.getElementById('messages').innerHTML = '';
+        }
+
+        function updateStats() {
+            document.getElementById('messagesSent').textContent = messagesSent;
+            document.getElementById('messagesReceived').textContent = messagesReceived;
+        }
+
+        function startConnectionTimer() {
+            setInterval(function() {
+                if (connectionStartTime) {
+                    const seconds = Math.floor((Date.now() - connectionStartTime) / 1000);
+                    document.getElementById('connectionTime').textContent = seconds + 's';
+                }
+            }, 1000);
+        }
+
+        // Quick action buttons
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && e.ctrlKey) {
+                sendMessage();
+            }
+        });
+    </script>
+</body>
+</html>
