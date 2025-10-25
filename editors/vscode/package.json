@@ -1,0 +1,98 @@
+{
+  "name": "conduit-language",
+  "displayName": "Conduit Language Support",
+  "description": "Language support for Conduit programming language",
+  "version": "0.1.0",
+  "publisher": "conduit-lang",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/conduit-lang/conduit"
+  },
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "keywords": [
+    "conduit",
+    "language",
+    "web framework"
+  ],
+  "activationEvents": [
+    "onLanguage:conduit"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "conduit",
+        "aliases": [
+          "Conduit",
+          "conduit"
+        ],
+        "extensions": [
+          ".cdt"
+        ],
+        "configuration": "./language-configuration.json",
+        "icon": {
+          "light": "./icons/conduit-light.png",
+          "dark": "./icons/conduit-dark.png"
+        }
+      }
+    ],
+    "grammars": [
+      {
+        "language": "conduit",
+        "scopeName": "source.conduit",
+        "path": "./syntaxes/conduit.tmLanguage.json"
+      }
+    ],
+    "configuration": {
+      "type": "object",
+      "title": "Conduit",
+      "properties": {
+        "conduit.lsp.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable Conduit Language Server Protocol"
+        },
+        "conduit.lsp.path": {
+          "type": "string",
+          "default": "conduit",
+          "description": "Path to conduit executable"
+        },
+        "conduit.lsp.trace.server": {
+          "type": "string",
+          "enum": [
+            "off",
+            "messages",
+            "verbose"
+          ],
+          "default": "off",
+          "description": "Traces the communication between VS Code and the language server"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile",
+    "lint": "eslint src --ext ts",
+    "package": "vsce package"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^8.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^18.x",
+    "@types/vscode": "^1.75.0",
+    "@typescript-eslint/eslint-plugin": "^5.x",
+    "@typescript-eslint/parser": "^5.x",
+    "eslint": "^8.x",
+    "typescript": "^5.x",
+    "@vscode/vsce": "^2.x"
+  }
+}
