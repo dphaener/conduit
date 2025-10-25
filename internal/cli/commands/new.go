@@ -6,10 +6,13 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"text/template"
+	"time"
 
 	"github.com/AlecAivazis/survey/v2"
+	"github.com/conduit-lang/conduit/internal/templates"
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 )
@@ -21,6 +24,7 @@ var (
 	newInteractive bool
 	newDatabase    string
 	newPort        int
+	newTemplate    string
 )
 
 // validateProjectName validates project name with security checks
@@ -56,9 +60,14 @@ func NewNewCommand() *cobra.Command {
 
 If no project name is provided, you will be prompted to enter one.
 
+Templates:
+  api          - RESTful API with resources and authentication
+  web          - Full-stack web application with frontend and backend
+  microservice - Event-driven microservice with message queues
+
 Examples:
   conduit new my-blog
-  conduit new my-api --database postgres
+  conduit new my-api --template api
   conduit new --interactive`,
 		RunE: runNew,
 	}
@@ -66,13 +75,13 @@ Examples:
 	cmd.Flags().BoolVarP(&newInteractive, "interactive", "i", false, "Interactive project setup with prompts")
 	cmd.Flags().StringVar(&newDatabase, "database", "postgresql", "Database type (postgresql)")
 	cmd.Flags().IntVar(&newPort, "port", 3000, "Default server port")
+	cmd.Flags().StringVarP(&newTemplate, "template", "t", "", "Project template to use (api, web, microservice)")
 
 	return cmd
 }
 
 func runNew(cmd *cobra.Command, args []string) error {
 	var projectName string
-	var dbURL string
 
 	successColor := color.New(color.FgGreen, color.Bold)
 	infoColor := color.New(color.FgCyan)
@@ -81,8 +90,206 @@ func runNew(cmd *cobra.Command, args []string) error {
 	// Get project name from args or prompt
 	if len(args) > 0 {
 		projectName = args[0]
-	} else if !newInteractive {
-		// Prompt for project name if not provided and not in interactive mode
+	}
+
+	// Use template system if template is specified
+	if newTemplate != "" || newInteractive {
+		return runNewWithTemplate(projectName)
+	}
+
+	// Legacy mode for backwards compatibility (no template specified)
+	return runNewLegacy(projectName, successColor, infoColor, promptColor)
+}
+
+func runNewWithTemplate(projectName string) error {
+	successColor := color.New(color.FgGreen, color.Bold)
+	infoColor := color.New(color.FgCyan)
+	promptColor := color.New(color.FgYellow)
+
+	// Initialize built-in templates
+	if err := templates.RegisterBuiltinTemplates(); err != nil {
+		return fmt.Errorf("failed to register templates: %w", err)
+	}
+
+	registry := templates.DefaultRegistry()
+
+	// Select template
+	var tmpl *templates.Template
+	if newTemplate != "" {
+		var err error
+		tmpl, err = registry.Get(newTemplate)
+		if err != nil {
+			return fmt.Errorf("template '%s' not found. Use 'conduit template list' to see available templates", newTemplate)
+		}
+	} else {
+		// Interactive template selection
+		tmplList := registry.List()
+		templateOptions := make([]string, len(tmplList))
+		for i, t := range tmplList {
+			templateOptions[i] = fmt.Sprintf("%s - %s", t.Name, t.Description)
+		}
+
+		var selectedIdx int
+		prompt := &survey.Select{
+			Message: "Select a template:",
+			Options: templateOptions,
+		}
+		if err := survey.AskOne(prompt, &selectedIdx); err != nil {
+			return err
+		}
+
+		tmpl = tmplList[selectedIdx]
+	}
+
+	infoColor.Printf("Using template: %s\n\n", tmpl.Name)
+
+	// Collect variables
+	ctx := &templates.TemplateContext{
+		Variables: make(map[string]interface{}),
+		Timestamp: time.Now(),
+	}
+
+	// Project name
+	if projectName == "" {
+		prompt := &survey.Input{
+			Message: "Project name:",
+		}
+		if err := survey.AskOne(prompt, &projectName, survey.WithValidator(survey.Required)); err != nil {
+			return err
+		}
+	}
+
+	// Validate project name
+	if err := validateProjectName(projectName); err != nil {
+		return err
+	}
+
+	ctx.ProjectName = projectName
+
+	// Collect template variables
+	for _, v := range tmpl.Variables {
+		// Skip project_name as we already collected it
+		if v.Name == "project_name" {
+			ctx.Variables[v.Name] = projectName
+			continue
+		}
+
+		var value interface{}
+		var err error
+
+		switch v.Type {
+		case templates.VariableTypeString:
+			var strVal string
+			prompt := &survey.Input{
+				Message: v.Prompt,
+				Default: fmt.Sprintf("%v", v.Default),
+			}
+			validators := []survey.Validator{}
+			if v.Required {
+				validators = append(validators, survey.Required)
+			}
+			if err := survey.AskOne(prompt, &strVal, survey.WithValidator(survey.ComposeValidators(validators...))); err != nil {
+				return err
+			}
+			value = strVal
+
+		case templates.VariableTypeInt:
+			var intStr string
+			defaultVal := "0"
+			if v.Default != nil {
+				defaultVal = fmt.Sprintf("%v", v.Default)
+			}
+			prompt := &survey.Input{
+				Message: v.Prompt,
+				Default: defaultVal,
+			}
+			if err := survey.AskOne(prompt, &intStr); err != nil {
+				return err
+			}
+			var intVal int
+			if intStr != "" {
+				intVal, err = strconv.Atoi(intStr)
+				if err != nil {
+					return fmt.Errorf("invalid integer value for %s: %w", v.Name, err)
+				}
+			} else if v.Default != nil {
+				intVal = v.Default.(int)
+			}
+			value = intVal
+
+		case templates.VariableTypeBool, templates.VariableTypeConfirm:
+			var boolVal bool
+			defaultBool := false
+			if v.Default != nil {
+				defaultBool = v.Default.(bool)
+			}
+			prompt := &survey.Confirm{
+				Message: v.Prompt,
+				Default: defaultBool,
+			}
+			if err := survey.AskOne(prompt, &boolVal); err != nil {
+				return err
+			}
+			value = boolVal
+
+		case templates.VariableTypeSelect:
+			var selected string
+			prompt := &survey.Select{
+				Message: v.Prompt,
+				Options: v.Options,
+			}
+			if v.Default != nil {
+				prompt.Default = fmt.Sprintf("%v", v.Default)
+			}
+			if err := survey.AskOne(prompt, &selected); err != nil {
+				return err
+			}
+			value = selected
+
+		default:
+			return fmt.Errorf("unsupported variable type: %s", v.Type)
+		}
+
+		ctx.Variables[v.Name] = value
+	}
+
+	// Check if directory exists
+	projectPath := filepath.Join(".", projectName)
+	if _, err := os.Stat(projectPath); err == nil {
+		return fmt.Errorf("directory %s already exists", projectName)
+	}
+
+	infoColor.Printf("Creating project: %s\n\n", projectName)
+
+	// Execute template
+	engine := templates.NewEngine()
+	if err := engine.Execute(tmpl, ctx, projectPath); err != nil {
+		return fmt.Errorf("failed to execute template: %w", err)
+	}
+
+	// Run after-create hooks
+	if tmpl.Hooks != nil && len(tmpl.Hooks.AfterCreate) > 0 {
+		fmt.Println()
+		for _, hook := range tmpl.Hooks.AfterCreate {
+			fmt.Println(hook)
+		}
+	}
+
+	// Print success message
+	fmt.Println()
+	successColor.Printf("✓ Created project: %s\n\n", projectName)
+
+	promptColor.Println("Get started:")
+	fmt.Printf("  cd %s\n", projectName)
+
+	return nil
+}
+
+func runNewLegacy(projectName string, successColor, infoColor, promptColor *color.Color) error {
+	var dbURL string
+
+	// Get project name from prompt if not provided
+	if projectName == "" {
 		prompt := &survey.Input{
 			Message: "Project name:",
 		}
@@ -92,7 +299,7 @@ func runNew(cmd *cobra.Command, args []string) error {
 	}
 
 	// Interactive mode
-	if newInteractive || len(args) == 0 {
+	if newInteractive {
 		questions := []*survey.Question{
 			{
 				Name: "projectName",
