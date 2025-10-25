@@ -74,8 +74,8 @@ temp/
 *.bak
 *.backup
 
-# Debug files
-debug/
+# Debug files (root level only)
+/debug/
 *.pprof
 *.prof
 
