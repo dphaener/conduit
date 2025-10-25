@@ -16,6 +16,10 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib" // PostgreSQL driver
 )
 
+var (
+	migrateVerbose bool
+)
+
 // validateMigrationSQL validates migration SQL for dangerous operations
 func validateMigrationSQL(sql string) error {
 	// Check for dangerous operations
@@ -34,6 +38,36 @@ func validateMigrationSQL(sql string) error {
 		}
 	}
 	return nil
+}
+
+// categorizeDatabaseError returns a user-friendly error message based on the database error
+// In verbose mode, it returns the full error; otherwise, it returns a categorized message
+func categorizeDatabaseError(err error, verbose bool) string {
+	if verbose {
+		return err.Error()
+	}
+
+	errStr := strings.ToLower(err.Error())
+
+	// Categorize common database errors
+	if strings.Contains(errStr, "syntax") {
+		return "SQL syntax error - use --verbose for details"
+	}
+	if strings.Contains(errStr, "constraint") || strings.Contains(errStr, "violates") {
+		return "constraint violation - use --verbose for details"
+	}
+	if strings.Contains(errStr, "does not exist") {
+		return "referenced object does not exist - use --verbose for details"
+	}
+	if strings.Contains(errStr, "already exists") {
+		return "object already exists - use --verbose for details"
+	}
+	if strings.Contains(errStr, "permission denied") || strings.Contains(errStr, "access denied") {
+		return "permission denied - check database user privileges"
+	}
+
+	// Generic error for everything else
+	return "migration failed - use --verbose for details"
 }
 
 // NewMigrateCommand creates the migrate command
@@ -64,12 +98,16 @@ Available subcommands:
 }
 
 func newMigrateUpCommand() *cobra.Command {
-	return &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   "up",
 		Short: "Run all pending migrations",
 		Long:  "Apply all pending database migrations from the migrations/ directory",
 		RunE:  runMigrateUp,
 	}
+
+	cmd.Flags().BoolVarP(&migrateVerbose, "verbose", "v", false, "Show detailed error messages")
+
+	return cmd
 }
 
 func runMigrateUp(cmd *cobra.Command, args []string) error {
@@ -183,8 +221,7 @@ func runMigrateUp(cmd *cobra.Command, args []string) error {
 		// Execute migration SQL
 		if _, err := tx.Exec(upSQL); err != nil {
 			tx.Rollback()
-			// Don't expose database errors - use generic message
-			return fmt.Errorf("migration %s failed - syntax or constraint error", filename)
+			return fmt.Errorf("migration %s failed: %s", filename, categorizeDatabaseError(err, migrateVerbose))
 		}
 
 		// Record migration with up and down SQL
@@ -214,12 +251,16 @@ func runMigrateUp(cmd *cobra.Command, args []string) error {
 }
 
 func newMigrateDownCommand() *cobra.Command {
-	return &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   "down",
 		Short: "Rollback the last migration",
 		Long:  "Rollback the most recently applied migration",
 		RunE:  runMigrateDown,
 	}
+
+	cmd.Flags().BoolVarP(&migrateVerbose, "verbose", "v", false, "Show detailed error messages")
+
+	return cmd
 }
 
 func runMigrateDown(cmd *cobra.Command, args []string) error {
@@ -289,8 +330,7 @@ func runMigrateDown(cmd *cobra.Command, args []string) error {
 	// Execute down migration SQL
 	if _, err := tx.Exec(downSQL.String); err != nil {
 		tx.Rollback()
-		// Don't expose database errors - use generic message
-		return fmt.Errorf("rollback failed - syntax or constraint error")
+		return fmt.Errorf("rollback failed: %s", categorizeDatabaseError(err, migrateVerbose))
 	}
 
 	// Remove migration record
@@ -426,7 +466,7 @@ func newMigrateRollbackCommand() *cobra.Command {
 		Use:   "rollback [--steps N]",
 		Short: "Rollback N migrations",
 		Long:  "Rollback the last N migrations (default: 1)",
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmdInner *cobra.Command, args []string) error {
 			successColor := color.New(color.FgGreen, color.Bold)
 			infoColor := color.New(color.FgCyan)
 
@@ -499,8 +539,7 @@ func newMigrateRollbackCommand() *cobra.Command {
 				// Execute down migration SQL
 				if _, err := tx.Exec(downSQL.String); err != nil {
 					tx.Rollback()
-					// Don't expose database errors - use generic message
-					return fmt.Errorf("rollback failed - syntax or constraint error")
+					return fmt.Errorf("rollback failed: %s", categorizeDatabaseError(err, migrateVerbose))
 				}
 
 				// Remove migration record
@@ -522,6 +561,7 @@ func newMigrateRollbackCommand() *cobra.Command {
 	}
 
 	cmd.Flags().IntVarP(&rollbackSteps, "steps", "n", 1, "Number of migrations to rollback")
+	cmd.Flags().BoolVarP(&migrateVerbose, "verbose", "v", false, "Show detailed error messages")
 
 	return cmd
 }

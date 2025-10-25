@@ -90,7 +90,7 @@ Examples:
 			}
 
 			warningColor.Println("\nNote: Full resource generation is not yet implemented (coming in tooling milestone)")
-			infoColor.Println("Creating basic resource template...\n")
+			infoColor.Println("Creating basic resource template...")
 
 			// Create basic resource template (stub)
 			content := fmt.Sprintf(`/// %s resource
@@ -136,9 +136,9 @@ that will be implemented in the tooling milestone.`,
 			infoColor := color.New(color.FgCyan)
 
 			warningColor.Println("\nController generation is not yet implemented.")
-			infoColor.Println("This feature will be added in the tooling milestone.\n")
+			infoColor.Println("This feature will be added in the tooling milestone.")
 			infoColor.Println("Conduit auto-generates REST controllers from resources.")
-			infoColor.Println("Custom controllers will be supported in a future release.\n")
+			infoColor.Println("Custom controllers will be supported in a future release.")
 
 			return nil
 		},
