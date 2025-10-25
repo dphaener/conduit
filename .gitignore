@@ -1,5 +1,5 @@
 # Conduit Build Artifacts
-build/
+/build/
 *.conduit-cache
 *.meta.json.cache
 
