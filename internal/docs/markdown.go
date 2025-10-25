@@ -22,7 +22,19 @@ func NewMarkdownGenerator(config *Config) *MarkdownGenerator {
 
 // Generate generates Markdown documentation
 func (g *MarkdownGenerator) Generate(doc *Documentation) error {
-	outputDir := filepath.Join(g.config.OutputDir, "markdown")
+	// Validate the output directory BEFORE making it absolute
+	if containsPathTraversal(g.config.OutputDir) {
+		return fmt.Errorf("invalid output directory: path traversal detected")
+	}
+
+	// Clean and make the path absolute
+	baseDir := filepath.Clean(g.config.OutputDir)
+	if !filepath.IsAbs(baseDir) {
+		cwd, _ := os.Getwd()
+		baseDir = filepath.Join(cwd, baseDir)
+	}
+
+	outputDir := filepath.Join(baseDir, "markdown")
 	if err := os.MkdirAll(outputDir, 0755); err != nil {
 		return fmt.Errorf("failed to create output directory: %w", err)
 	}

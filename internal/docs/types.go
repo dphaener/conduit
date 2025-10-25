@@ -3,6 +3,8 @@
 package docs
 
 import (
+	"fmt"
+
 	"github.com/conduit-lang/conduit/internal/compiler/ast"
 )
 
@@ -304,11 +306,29 @@ type ConstraintDoc struct {
 }
 
 // NewGenerator creates a new documentation generator
-func NewGenerator(config *Config) *Generator {
+func NewGenerator(config *Config) (*Generator, error) {
+	// Validate project name
+	if config.ProjectName == "" {
+		return nil, fmt.Errorf("project name is required")
+	}
+	if len(config.ProjectName) > 100 {
+		return nil, fmt.Errorf("project name too long (max 100 characters)")
+	}
+
+	// Validate project version
+	if config.ProjectVersion == "" {
+		config.ProjectVersion = "0.0.0"
+	}
+
+	// Validate project description length
+	if len(config.ProjectDescription) > 500 {
+		return nil, fmt.Errorf("project description too long (max 500 characters)")
+	}
+
 	return &Generator{
 		config:    config,
 		extractor: NewExtractor(),
-	}
+	}, nil
 }
 
 // Generate generates documentation in all configured formats
