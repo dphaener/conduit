@@ -47,6 +47,7 @@ Features:
 	rootCmd.AddCommand(NewDebugCommand())
 	rootCmd.AddCommand(NewFormatCommand())
 	rootCmd.AddCommand(NewTemplateCommand())
+	rootCmd.AddCommand(NewDocsCommand())
 
 	return rootCmd
 }
