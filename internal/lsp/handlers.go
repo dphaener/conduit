@@ -3,8 +3,10 @@ package lsp
 import (
 	"context"
 	"encoding/json"
+	"path/filepath"
 	"strings"
 
+	"github.com/conduit-lang/conduit/internal/format"
 	"github.com/conduit-lang/conduit/internal/tooling"
 	"go.lsp.dev/jsonrpc2"
 	"go.lsp.dev/protocol"
@@ -319,4 +321,124 @@ func convertSymbolKind(kind tooling.SymbolKind) protocol.SymbolKind {
 	default:
 		return protocol.SymbolKindObject
 	}
+}
+
+// handleTextDocumentFormatting handles document formatting requests
+func (s *Server) handleTextDocumentFormatting(ctx context.Context, reply jsonrpc2.Replier, req jsonrpc2.Request) error {
+	var params protocol.DocumentFormattingParams
+	if err := json.Unmarshal(req.Params(), &params); err != nil {
+		return s.replyWithError(ctx, reply, jsonrpc2.InvalidParams, "Failed to parse formatting params")
+	}
+
+	uri := string(params.TextDocument.URI)
+
+	// Get document content
+	doc, exists := s.api.GetDocument(uri)
+	if !exists {
+		return s.replyWithError(ctx, reply, jsonrpc2.InvalidRequest, "Document not found")
+	}
+
+	// Load config from workspace root
+	configPath := ".conduit-format.yml"
+	if s.workspaceRoot != "" {
+		configPath = filepath.Join(s.workspaceRoot, ".conduit-format.yml")
+	}
+	config, err := format.LoadConfig(configPath)
+	if err != nil {
+		s.logger.Printf("Error loading config, using defaults: %v", err)
+		config = format.DefaultConfig()
+	}
+
+	// Format the document
+	formatter := format.New(config)
+	formatted, err := formatter.Format(doc.Content)
+	if err != nil {
+		s.logger.Printf("Error formatting document: %v", err)
+		return s.replyWithError(ctx, reply, jsonrpc2.InternalError, "Failed to format document")
+	}
+
+	// If no changes, return empty edits
+	if formatted == doc.Content {
+		return reply(ctx, []protocol.TextEdit{}, nil)
+	}
+
+	// Create a single text edit that replaces the entire document
+	lines := strings.Split(doc.Content, "\n")
+	endLine := len(lines) - 1
+	endChar := 0
+	if endLine >= 0 && endLine < len(lines) {
+		endChar = len(lines[endLine])
+	}
+
+	edit := protocol.TextEdit{
+		Range: protocol.Range{
+			Start: protocol.Position{Line: 0, Character: 0},
+			End:   protocol.Position{Line: uint32(endLine), Character: uint32(endChar)},
+		},
+		NewText: formatted,
+	}
+
+	return reply(ctx, []protocol.TextEdit{edit}, nil)
+}
+
+// handleTextDocumentRangeFormatting handles range formatting requests
+func (s *Server) handleTextDocumentRangeFormatting(ctx context.Context, reply jsonrpc2.Replier, req jsonrpc2.Request) error {
+	var params protocol.DocumentRangeFormattingParams
+	if err := json.Unmarshal(req.Params(), &params); err != nil {
+		return s.replyWithError(ctx, reply, jsonrpc2.InvalidParams, "Failed to parse range formatting params")
+	}
+
+	uri := string(params.TextDocument.URI)
+
+	// For now, range formatting just formats the entire document
+	// This is a common approach for many formatters since formatting
+	// often needs full context to maintain consistency
+
+	// Get document content
+	doc, exists := s.api.GetDocument(uri)
+	if !exists {
+		return s.replyWithError(ctx, reply, jsonrpc2.InvalidRequest, "Document not found")
+	}
+
+	// Load config from workspace root
+	configPath := ".conduit-format.yml"
+	if s.workspaceRoot != "" {
+		configPath = filepath.Join(s.workspaceRoot, ".conduit-format.yml")
+	}
+	config, err := format.LoadConfig(configPath)
+	if err != nil {
+		s.logger.Printf("Error loading config, using defaults: %v", err)
+		config = format.DefaultConfig()
+	}
+
+	// Format the document
+	formatter := format.New(config)
+	formatted, err := formatter.Format(doc.Content)
+	if err != nil {
+		s.logger.Printf("Error formatting document: %v", err)
+		return s.replyWithError(ctx, reply, jsonrpc2.InternalError, "Failed to format document")
+	}
+
+	// If no changes, return empty edits
+	if formatted == doc.Content {
+		return reply(ctx, []protocol.TextEdit{}, nil)
+	}
+
+	// Create a single text edit that replaces the entire document
+	lines := strings.Split(doc.Content, "\n")
+	endLine := len(lines) - 1
+	endChar := 0
+	if endLine >= 0 && endLine < len(lines) {
+		endChar = len(lines[endLine])
+	}
+
+	edit := protocol.TextEdit{
+		Range: protocol.Range{
+			Start: protocol.Position{Line: 0, Character: 0},
+			End:   protocol.Position{Line: uint32(endLine), Character: uint32(endChar)},
+		},
+		NewText: formatted,
+	}
+
+	return reply(ctx, []protocol.TextEdit{edit}, nil)
 }

@@ -12,6 +12,7 @@ import (
 	"github.com/conduit-lang/conduit/internal/tooling"
 	"go.lsp.dev/jsonrpc2"
 	"go.lsp.dev/protocol"
+	"go.lsp.dev/uri"
 	"go.uber.org/zap"
 )
 
@@ -28,6 +29,9 @@ type Server struct {
 
 	// logger for debugging
 	logger *log.Logger
+
+	// workspaceRoot is the root directory of the workspace
+	workspaceRoot string
 
 	// Server capabilities
 	capabilities protocol.ServerCapabilities
@@ -58,9 +62,19 @@ func NewServer() *Server {
 					WorkDoneProgress: false,
 				},
 			},
-			ReferencesProvider:     true,
-			DocumentSymbolProvider: true,
+			ReferencesProvider:      true,
+			DocumentSymbolProvider:  true,
 			WorkspaceSymbolProvider: true,
+			DocumentFormattingProvider: &protocol.DocumentFormattingOptions{
+				WorkDoneProgressOptions: protocol.WorkDoneProgressOptions{
+					WorkDoneProgress: false,
+				},
+			},
+			DocumentRangeFormattingProvider: &protocol.DocumentRangeFormattingOptions{
+				WorkDoneProgressOptions: protocol.WorkDoneProgressOptions{
+					WorkDoneProgress: false,
+				},
+			},
 		},
 	}
 }
@@ -129,6 +143,10 @@ func (s *Server) handler() jsonrpc2.Handler {
 			return s.handleTextDocumentDocumentSymbol(ctx, reply, req)
 		case protocol.MethodWorkspaceSymbol:
 			return s.handleWorkspaceSymbol(ctx, reply, req)
+		case protocol.MethodTextDocumentFormatting:
+			return s.handleTextDocumentFormatting(ctx, reply, req)
+		case protocol.MethodTextDocumentRangeFormatting:
+			return s.handleTextDocumentRangeFormatting(ctx, reply, req)
 		default:
 			return reply(ctx, nil, jsonrpc2.ErrMethodNotFound)
 		}
@@ -143,6 +161,21 @@ func (s *Server) handleInitialize(ctx context.Context, reply jsonrpc2.Replier, r
 	}
 
 	s.logger.Printf("Initialize from client: %v", params.ClientInfo)
+
+	// Extract workspace root from params
+	if len(params.WorkspaceFolders) > 0 {
+		// Use workspace folders if available (LSP 3.6+)
+		s.workspaceRoot = uri.URI(params.WorkspaceFolders[0].URI).Filename()
+		s.logger.Printf("Workspace root set to: %s", s.workspaceRoot)
+	} else if params.RootURI != "" {
+		// Fall back to rootUri (deprecated but still used)
+		s.workspaceRoot = params.RootURI.Filename()
+		s.logger.Printf("Workspace root set to: %s (from rootUri)", s.workspaceRoot)
+	} else if params.RootPath != "" {
+		// Fall back to rootPath (deprecated)
+		s.workspaceRoot = params.RootPath
+		s.logger.Printf("Workspace root set to: %s (from rootPath)", s.workspaceRoot)
+	}
 
 	result := protocol.InitializeResult{
 		Capabilities: s.capabilities,
