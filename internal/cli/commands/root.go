@@ -44,6 +44,7 @@ Features:
 	rootCmd.AddCommand(NewMigrateCommand())
 	rootCmd.AddCommand(NewGenerateCommand())
 	rootCmd.AddCommand(NewLSPCommand())
+	rootCmd.AddCommand(NewDebugCommand())
 
 	return rootCmd
 }

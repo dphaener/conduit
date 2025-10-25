@@ -20,7 +20,8 @@
     "web framework"
   ],
   "activationEvents": [
-    "onLanguage:conduit"
+    "onLanguage:conduit",
+    "onDebug"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -71,9 +72,123 @@
           ],
           "default": "off",
           "description": "Traces the communication between VS Code and the language server"
+        },
+        "conduit.debug.path": {
+          "type": "string",
+          "default": "conduit",
+          "description": "Path to conduit executable for debugging"
+        },
+        "conduit.debug.port": {
+          "type": "number",
+          "default": 0,
+          "description": "DAP server port (0 = auto)"
+        },
+        "conduit.debug.sourceMapsPath": {
+          "type": "string",
+          "default": "${workspaceFolder}/build",
+          "description": "Path to source maps directory"
         }
       }
-    }
+    },
+    "breakpoints": [
+      {
+        "language": "conduit"
+      }
+    ],
+    "debuggers": [
+      {
+        "type": "conduit",
+        "label": "Conduit Debug",
+        "languages": [
+          "conduit"
+        ],
+        "configurationAttributes": {
+          "launch": {
+            "required": [
+              "program"
+            ],
+            "properties": {
+              "program": {
+                "type": "string",
+                "description": "Path to the compiled Conduit application",
+                "default": "${workspaceFolder}/build/app"
+              },
+              "args": {
+                "type": "array",
+                "description": "Command line arguments passed to the program",
+                "items": {
+                  "type": "string"
+                },
+                "default": []
+              },
+              "cwd": {
+                "type": "string",
+                "description": "Working directory",
+                "default": "${workspaceFolder}"
+              },
+              "env": {
+                "type": "object",
+                "description": "Environment variables",
+                "default": {}
+              },
+              "stopOnEntry": {
+                "type": "boolean",
+                "description": "Automatically stop after launch",
+                "default": false
+              },
+              "showLog": {
+                "type": "boolean",
+                "description": "Show debug output log",
+                "default": false
+              },
+              "conduitPath": {
+                "type": "string",
+                "description": "Path to conduit executable",
+                "default": "conduit"
+              },
+              "port": {
+                "type": "number",
+                "description": "DAP server port (0 = auto)",
+                "default": 0
+              },
+              "sourceMapsPath": {
+                "type": "string",
+                "description": "Path to source maps directory",
+                "default": "${workspaceFolder}/build"
+              }
+            }
+          }
+        },
+        "initialConfigurations": [
+          {
+            "type": "conduit",
+            "request": "launch",
+            "name": "Launch Conduit Application",
+            "program": "${workspaceFolder}/build/app",
+            "stopOnEntry": false,
+            "args": [],
+            "cwd": "${workspaceFolder}",
+            "env": {}
+          }
+        ],
+        "configurationSnippets": [
+          {
+            "label": "Conduit: Launch",
+            "description": "Launch a Conduit application",
+            "body": {
+              "type": "conduit",
+              "request": "launch",
+              "name": "Launch Conduit Application",
+              "program": "^\"\\${workspaceFolder}/build/app\"",
+              "stopOnEntry": false,
+              "args": [],
+              "cwd": "^\"\\${workspaceFolder}\"",
+              "env": {}
+            }
+          }
+        ]
+      }
+    ]
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
@@ -84,7 +199,8 @@
     "package": "vsce package"
   },
   "dependencies": {
-    "vscode-languageclient": "^8.1.0"
+    "vscode-languageclient": "^8.1.0",
+    "@vscode/debugprotocol": "^1.59.0"
   },
   "devDependencies": {
     "@types/node": "^18.x",
