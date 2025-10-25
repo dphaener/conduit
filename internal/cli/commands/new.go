@@ -38,14 +38,10 @@ func validateProjectName(name string) error {
 	}
 
 	// Only allow alphanumeric, dash, and underscore
+	// This regex already prevents dots (including ".."), so no additional check needed
 	matched, _ := regexp.MatchString(`^[a-zA-Z0-9_-]+$`, name)
 	if !matched {
 		return fmt.Errorf("project name can only contain letters, numbers, dashes, and underscores")
-	}
-
-	// Additional security checks
-	if strings.Contains(name, "..") {
-		return fmt.Errorf("project name cannot contain '..'")
 	}
 
 	return nil
@@ -211,12 +207,22 @@ func runNew(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("failed to create file %s: %w", destFullPath, err)
 		}
 
+		// Set up cleanup on failure
+		defer func() {
+			if err != nil {
+				f.Close()
+				os.Remove(destFullPath)
+			}
+		}()
+
 		if err := tmpl.Execute(f, data); err != nil {
 			f.Close()
+			os.Remove(destFullPath)
 			return fmt.Errorf("failed to execute template %s: %w", tmplPath, err)
 		}
 
 		if err := f.Close(); err != nil {
+			os.Remove(destFullPath)
 			return fmt.Errorf("failed to close file %s: %w", destFullPath, err)
 		}
 

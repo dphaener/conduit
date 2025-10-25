@@ -1,12 +1,14 @@
 package commands
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
 	"os/signal"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
@@ -89,7 +91,7 @@ func runRun(cmd *cobra.Command, args []string) error {
 	// Show hot reload status
 	if runHotReload {
 		warningColor.Println("\nNote: Hot reload is not yet implemented (coming in tooling milestone)")
-		infoColor.Println("For now, restart 'conduit run' to see changes\n")
+		infoColor.Println("For now, restart 'conduit run' to see changes")
 	}
 
 	// Run the application
@@ -106,10 +108,11 @@ func runRun(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to start application: %w", err)
 	}
 
-	// Handle Ctrl+C gracefully
+	// Handle Ctrl+C gracefully with timeout
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 
+	shutdownComplete := make(chan struct{})
 	go func() {
 		<-sigChan
 		infoColor.Println("\nShutting down server...")
@@ -118,21 +121,51 @@ func runRun(cmd *cobra.Command, args []string) error {
 			if err := app.Process.Signal(syscall.SIGTERM); err != nil {
 				// If SIGTERM fails, fall back to SIGKILL
 				app.Process.Kill()
+				close(shutdownComplete)
+				return
+			}
+
+			// Wait for graceful shutdown with 10 second timeout
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+
+			done := make(chan struct{})
+			go func() {
+				app.Wait()
+				close(done)
+			}()
+
+			select {
+			case <-done:
+				// Graceful shutdown completed
+				infoColor.Println("Server stopped gracefully")
+			case <-ctx.Done():
+				// Timeout - force kill
+				warningColor.Println("Shutdown timeout - forcing termination")
+				app.Process.Kill()
 			}
 		}
+		close(shutdownComplete)
 	}()
 
-	// Wait for the application to finish (don't call os.Exit)
-	if err := app.Wait(); err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			// Check for signal-based termination
-			if exitErr.ExitCode() == -1 || strings.Contains(err.Error(), "signal") {
-				// Process was killed by signal, this is expected
-				return nil
+	// Wait for the application to finish or shutdown signal
+	select {
+	case <-shutdownComplete:
+		// Shutdown was triggered and completed
+		return nil
+	default:
+		// Wait for the application to finish (don't call os.Exit)
+		if err := app.Wait(); err != nil {
+			if exitErr, ok := err.(*exec.ExitError); ok {
+				// Check for signal-based termination
+				if exitErr.ExitCode() == -1 || strings.Contains(err.Error(), "signal") {
+					// Process was killed by signal, this is expected
+					return nil
+				}
 			}
+			return fmt.Errorf("application exited with error: %w", err)
 		}
-		return fmt.Errorf("application exited with error: %w", err)
-	}
 
-	return nil
+		return nil
+	}
 }

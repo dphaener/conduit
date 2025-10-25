@@ -174,42 +174,42 @@ func TestNewCommandPathTraversal(t *testing.T) {
 		{
 			name:          "double dots",
 			projectName:   "../malware",
-			expectedError: "cannot contain '..'",
+			expectedError: "can only contain letters, numbers, dashes, and underscores",
 		},
 		{
 			name:          "multiple double dots",
 			projectName:   "../../etc/malware",
-			expectedError: "cannot contain '..'",
+			expectedError: "can only contain letters, numbers, dashes, and underscores",
 		},
 		{
 			name:          "dots only",
 			projectName:   "...",
-			expectedError: "cannot contain '..'",
+			expectedError: "can only contain letters, numbers, dashes, and underscores",
 		},
 		{
 			name:          "forward slash",
 			projectName:   "foo/bar",
-			expectedError: "cannot contain path separators",
+			expectedError: "can only contain letters, numbers, dashes, and underscores",
 		},
 		{
 			name:          "backslash",
 			projectName:   "foo\\bar",
-			expectedError: "cannot contain path separators",
+			expectedError: "can only contain letters, numbers, dashes, and underscores",
 		},
 		{
 			name:          "starts with dot",
 			projectName:   ".hidden",
-			expectedError: "cannot start with '.'",
+			expectedError: "can only contain letters, numbers, dashes, and underscores",
 		},
 		{
 			name:          "empty name",
 			projectName:   "",
-			expectedError: "cannot be empty",
+			expectedError: "must be 1-100 characters",
 		},
 		{
 			name:          "whitespace only",
 			projectName:   "   ",
-			expectedError: "cannot be empty",
+			expectedError: "must be 1-100 characters",
 		},
 	}
 
