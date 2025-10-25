@@ -16,7 +16,10 @@ func TestNewGenerator(t *testing.T) {
 		Formats:        []Format{FormatHTML, FormatMarkdown, FormatOpenAPI},
 	}
 
-	gen := NewGenerator(config)
+	gen, err := NewGenerator(config)
+	if err != nil {
+		t.Fatalf("NewGenerator returned error: %v", err)
+	}
 	if gen == nil {
 		t.Fatal("NewGenerator returned nil")
 	}
@@ -42,7 +45,10 @@ func TestGenerator_Generate(t *testing.T) {
 		BaseURL:            "https://api.example.com",
 	}
 
-	generator := NewGenerator(config)
+	generator, err := NewGenerator(config)
+	if err != nil {
+		t.Fatalf("NewGenerator failed: %v", err)
+	}
 
 	program := &ast.Program{
 		Resources: []*ast.ResourceNode{
@@ -68,7 +74,7 @@ func TestGenerator_Generate(t *testing.T) {
 		},
 	}
 
-	err := generator.Generate(program)
+	err = generator.Generate(program)
 	if err != nil {
 		t.Fatalf("Generate failed: %v", err)
 	}
@@ -102,7 +108,10 @@ func TestGenerator_GenerateSingleFormat(t *testing.T) {
 		Formats:        []Format{FormatOpenAPI},
 	}
 
-	generator := NewGenerator(config)
+	generator, err := NewGenerator(config)
+	if err != nil {
+		t.Fatalf("NewGenerator failed: %v", err)
+	}
 
 	program := &ast.Program{
 		Resources: []*ast.ResourceNode{
@@ -119,7 +128,7 @@ func TestGenerator_GenerateSingleFormat(t *testing.T) {
 		},
 	}
 
-	err := generator.Generate(program)
+	err = generator.Generate(program)
 	if err != nil {
 		t.Fatalf("Generate failed: %v", err)
 	}
@@ -147,13 +156,16 @@ func TestGenerator_EmptyProgram(t *testing.T) {
 		Formats:        []Format{FormatMarkdown},
 	}
 
-	generator := NewGenerator(config)
+	generator, err := NewGenerator(config)
+	if err != nil {
+		t.Fatalf("NewGenerator failed: %v", err)
+	}
 
 	program := &ast.Program{
 		Resources: []*ast.ResourceNode{},
 	}
 
-	err := generator.Generate(program)
+	err = generator.Generate(program)
 	if err != nil {
 		t.Fatalf("Generate failed for empty program: %v", err)
 	}
@@ -163,4 +175,115 @@ func TestGenerator_EmptyProgram(t *testing.T) {
 	if _, err := os.Stat(mdReadme); os.IsNotExist(err) {
 		t.Error("README not generated for empty program")
 	}
+}
+
+func TestNewGenerator_Validation(t *testing.T) {
+	tests := []struct {
+		name        string
+		config      *Config
+		shouldError bool
+		errorMsg    string
+	}{
+		{
+			name: "empty project name",
+			config: &Config{
+				ProjectName: "",
+				OutputDir:   "/tmp/test",
+			},
+			shouldError: true,
+			errorMsg:    "project name is required",
+		},
+		{
+			name: "project name too long",
+			config: &Config{
+				ProjectName: "ThisIsAReallyLongProjectNameThatExceedsTheMaximumAllowedLengthOf100CharactersAndShouldFailValidationX",
+				OutputDir:   "/tmp/test",
+			},
+			shouldError: true,
+			errorMsg:    "project name too long",
+		},
+		{
+			name: "project description too long",
+			config: &Config{
+				ProjectName:        "TestProject",
+				ProjectDescription: "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. Lorem ipsum dolor sit amet, consectetur adipiscing elit.",
+				OutputDir:          "/tmp/test",
+			},
+			shouldError: true,
+			errorMsg:    "project description too long",
+		},
+		{
+			name: "valid config with empty version",
+			config: &Config{
+				ProjectName:    "TestProject",
+				ProjectVersion: "",
+				OutputDir:      "/tmp/test",
+			},
+			shouldError: false,
+		},
+		{
+			name: "valid config",
+			config: &Config{
+				ProjectName:    "TestProject",
+				ProjectVersion: "1.0.0",
+				OutputDir:      "/tmp/test",
+			},
+			shouldError: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gen, err := NewGenerator(tt.config)
+			if tt.shouldError {
+				if err == nil {
+					t.Errorf("Expected error containing '%s', got nil", tt.errorMsg)
+				} else if tt.errorMsg != "" && !containsString(err.Error(), tt.errorMsg) {
+					t.Errorf("Expected error containing '%s', got '%s'", tt.errorMsg, err.Error())
+				}
+				if gen != nil {
+					t.Error("Expected nil generator when error occurs")
+				}
+			} else {
+				if err != nil {
+					t.Errorf("Unexpected error: %v", err)
+				}
+				if gen == nil {
+					t.Error("Expected non-nil generator")
+				}
+				// Check that empty version gets defaulted
+				if tt.config.ProjectVersion == "" && gen.config.ProjectVersion != "0.0.0" {
+					t.Errorf("Expected version to be defaulted to '0.0.0', got '%s'", gen.config.ProjectVersion)
+				}
+			}
+		})
+	}
+}
+
+// Helper function to check if a string contains a substring
+func containsString(s, substr string) bool {
+	return len(s) >= len(substr) && (s == substr ||
+		(len(s) > len(substr) && findSubstring(s, substr)))
+}
+
+func findSubstring(s, substr string) bool {
+	if len(substr) == 0 {
+		return true
+	}
+	if len(s) < len(substr) {
+		return false
+	}
+	for i := 0; i <= len(s)-len(substr); i++ {
+		match := true
+		for j := 0; j < len(substr); j++ {
+			if s[i+j] != substr[j] {
+				match = false
+				break
+			}
+		}
+		if match {
+			return true
+		}
+	}
+	return false
 }

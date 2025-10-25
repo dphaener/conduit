@@ -149,7 +149,11 @@ func runDocsGenerate(cmd *cobra.Command, args []string) error {
 		BaseURL:            docsBaseURL,
 	}
 
-	generator := docs.NewGenerator(config)
+	generator, err := docs.NewGenerator(config)
+	if err != nil {
+		errorColor.Printf("Error: %v\n", err)
+		return err
+	}
 
 	// Generate documentation
 	if err := generator.Generate(program); err != nil {
@@ -203,8 +207,15 @@ func runDocsServe(cmd *cobra.Command, args []string) error {
 				return
 			}
 
+			// Determine project name
+			projectName := docsProjectName
+			if projectName == "" {
+				cwd, _ := os.Getwd()
+				projectName = filepath.Base(cwd)
+			}
+
 			config := &docs.Config{
-				ProjectName:        docsProjectName,
+				ProjectName:        projectName,
 				ProjectVersion:     docsVersion,
 				ProjectDescription: docsProjectDesc,
 				OutputDir:          docsOutput,
@@ -244,6 +255,8 @@ func parseFormats(formatStr string) []docs.Format {
 }
 
 func parseConduitSources() (*ast.Program, error) {
+	const maxResources = 1000 // reasonable limit
+
 	// Find all .cdt files
 	files, err := filepath.Glob("app/*.cdt")
 	if err != nil {
@@ -278,6 +291,11 @@ func parseConduitSources() (*ast.Program, error) {
 			return nil, fmt.Errorf("failed to parse %s: %d errors", file, len(parseErrors))
 		}
 
+		// Check resource limit before merging
+		if len(program.Resources)+len(fileProgram.Resources) > maxResources {
+			return nil, fmt.Errorf("resource limit exceeded: maximum %d resources allowed", maxResources)
+		}
+
 		// Merge resources
 		program.Resources = append(program.Resources, fileProgram.Resources...)
 	}
@@ -305,14 +323,18 @@ func watchAndRegenerate(program *ast.Program, config *docs.Config) error {
 			}
 
 			// Regenerate documentation
-			generator := docs.NewGenerator(config)
+			generator, err := docs.NewGenerator(config)
+			if err != nil {
+				errorColor.Printf("Generator creation error: %v\n", err)
+				return err
+			}
 			if err := generator.Generate(newProgram); err != nil {
 				errorColor.Printf("Generation error: %v\n", err)
 				return err
 			}
 
 			successColor.Println("✓ Documentation regenerated")
-			program = newProgram
+			// Note: program variable is not used after this point, so no need to update it
 			return nil
 		},
 	)

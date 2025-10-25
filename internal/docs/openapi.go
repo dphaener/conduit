@@ -23,8 +23,20 @@ func NewOpenAPIGenerator(config *Config) *OpenAPIGenerator {
 func (g *OpenAPIGenerator) Generate(doc *Documentation) error {
 	spec := g.createSpec(doc)
 
+	// Validate the output directory BEFORE making it absolute
+	if containsPathTraversal(g.config.OutputDir) {
+		return fmt.Errorf("invalid output directory: path traversal detected")
+	}
+
+	// Clean and make the path absolute
+	outputDir := filepath.Clean(g.config.OutputDir)
+	if !filepath.IsAbs(outputDir) {
+		cwd, _ := os.Getwd()
+		outputDir = filepath.Join(cwd, outputDir)
+	}
+
 	// Ensure output directory exists
-	outputPath := filepath.Join(g.config.OutputDir, "openapi.json")
+	outputPath := filepath.Join(outputDir, "openapi.json")
 	if err := os.MkdirAll(filepath.Dir(outputPath), 0755); err != nil {
 		return fmt.Errorf("failed to create output directory: %w", err)
 	}
@@ -313,12 +325,17 @@ func (g *OpenAPIGenerator) createComponents(resources []*ResourceDoc) map[string
 
 // mapTypeToOpenAPI maps Conduit types to OpenAPI types
 func (g *OpenAPIGenerator) mapTypeToOpenAPI(conduitType string) string {
-	// Remove nullability markers
-	if len(conduitType) > 0 {
-		conduitType = conduitType[:len(conduitType)-1]
+	if len(conduitType) == 0 {
+		return "string"
 	}
 
-	switch conduitType {
+	// Remove nullability markers (! or ?)
+	baseType := conduitType
+	if lastChar := conduitType[len(conduitType)-1]; lastChar == '!' || lastChar == '?' {
+		baseType = conduitType[:len(conduitType)-1]
+	}
+
+	switch baseType {
 	case "int", "integer", "bigint":
 		return "integer"
 	case "float", "decimal", "money":

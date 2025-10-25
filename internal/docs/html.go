@@ -8,6 +8,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 // HTMLGenerator generates interactive HTML documentation
@@ -25,7 +28,19 @@ func NewHTMLGenerator(config *Config) *HTMLGenerator {
 
 // Generate generates HTML documentation
 func (g *HTMLGenerator) Generate(doc *Documentation) error {
-	outputDir := filepath.Join(g.config.OutputDir, "html")
+	// Validate the output directory BEFORE making it absolute
+	if containsPathTraversal(g.config.OutputDir) {
+		return fmt.Errorf("invalid output directory: path traversal detected")
+	}
+
+	// Clean and make the path absolute
+	baseDir := filepath.Clean(g.config.OutputDir)
+	if !filepath.IsAbs(baseDir) {
+		cwd, _ := os.Getwd()
+		baseDir = filepath.Join(cwd, baseDir)
+	}
+
+	outputDir := filepath.Join(baseDir, "html")
 	if err := os.MkdirAll(outputDir, 0755); err != nil {
 		return fmt.Errorf("failed to create output directory: %w", err)
 	}
@@ -59,7 +74,7 @@ func (g *HTMLGenerator) Generate(doc *Documentation) error {
 func (g *HTMLGenerator) loadTemplates() error {
 	funcMap := template.FuncMap{
 		"lower":      strings.ToLower,
-		"title":      strings.Title,
+		"title":      cases.Title(language.English).String,
 		"json":       g.toJSON,
 		"jsonPretty": g.toJSONPretty,
 	}
@@ -135,14 +150,26 @@ func (g *HTMLGenerator) copyStaticAssets(outputDir string) error {
 
 // Helper functions
 
+// toJSON converts structured data to compact JSON.
+// Returns a JSON error object if marshaling fails.
 func (g *HTMLGenerator) toJSON(v interface{}) string {
-	data, _ := json.Marshal(v)
+	data, err := json.Marshal(v)
+	if err != nil {
+		return `{"error": "failed to marshal JSON"}`
+	}
 	return string(data)
 }
 
-func (g *HTMLGenerator) toJSONPretty(v interface{}) template.HTML {
-	data, _ := json.MarshalIndent(v, "", "  ")
-	return template.HTML(data)
+// toJSONPretty converts structured data to pretty JSON.
+// Returns a comment string if marshaling fails.
+// SECURITY: Only call with trusted structured data from AST, never user input.
+// The template.HTML return type bypasses HTML escaping to preserve JSON formatting in <pre> blocks.
+func (g *HTMLGenerator) toJSONPretty(v interface{}) string {
+	data, err := json.MarshalIndent(v, "", "  ")
+	if err != nil {
+		return "/* error: failed to marshal JSON */"
+	}
+	return string(data)
 }
 
 // Template definitions
