@@ -46,6 +46,7 @@ Features:
 	rootCmd.AddCommand(NewLSPCommand())
 	rootCmd.AddCommand(NewDebugCommand())
 	rootCmd.AddCommand(NewFormatCommand())
+	rootCmd.AddCommand(NewTemplateCommand())
 
 	return rootCmd
 }
