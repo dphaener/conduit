@@ -1,32 +1,40 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
-	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/spf13/cobra"
 
 	"github.com/conduit-lang/conduit/compiler/errors"
-	"github.com/conduit-lang/conduit/internal/compiler/ast"
-	"github.com/conduit-lang/conduit/internal/compiler/codegen"
-	"github.com/conduit-lang/conduit/internal/compiler/lexer"
-	"github.com/conduit-lang/conduit/internal/compiler/parser"
-	"github.com/conduit-lang/conduit/internal/compiler/typechecker"
+	"github.com/conduit-lang/conduit/internal/tooling/build"
 )
 
 var (
-	buildJSON    bool
-	buildVerbose bool
+	buildJSON      bool
+	buildVerbose   bool
+	buildMode      string
+	buildOutput    string
+	buildWatch     bool
+	buildNoCache   bool
+	buildMinify    bool
+	buildTreeShake bool
+	buildJobs      int
 )
 
 func init() {
 	buildCmd.Flags().BoolVar(&buildJSON, "json", false, "Output errors in JSON format")
 	buildCmd.Flags().BoolVar(&buildVerbose, "verbose", false, "Show detailed build output")
+	buildCmd.Flags().StringVar(&buildMode, "mode", "development", "Build mode (development|production|test)")
+	buildCmd.Flags().StringVar(&buildOutput, "output", "build/app", "Output path for binary")
+	buildCmd.Flags().BoolVar(&buildWatch, "watch", false, "Watch for changes and rebuild")
+	buildCmd.Flags().BoolVar(&buildNoCache, "no-cache", false, "Disable build cache")
+	buildCmd.Flags().BoolVar(&buildMinify, "minify", false, "Minify assets")
+	buildCmd.Flags().BoolVar(&buildTreeShake, "tree-shake", false, "Enable tree shaking (EXPERIMENTAL - not yet implemented)")
+	buildCmd.Flags().IntVar(&buildJobs, "jobs", 0, "Number of parallel jobs (0 = number of CPUs)")
 }
 
 var buildCmd = &cobra.Command{
@@ -34,191 +42,147 @@ var buildCmd = &cobra.Command{
 	Short: "Compile Conduit source to Go and build binary",
 	Long:  "Compile all .cdt files in the app/ directory and generate a native executable",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		startTime := time.Now()
-
 		// Check if app directory exists
 		if _, err := os.Stat("app"); os.IsNotExist(err) {
 			return fmt.Errorf("app/ directory not found - are you in a Conduit project?")
 		}
 
-		// Find all .cdt files
-		cdtFiles, err := filepath.Glob("app/*.cdt")
-		if err != nil {
-			return fmt.Errorf("failed to find .cdt files: %w", err)
+		// Parse build mode
+		var mode build.BuildMode
+		switch buildMode {
+		case "development", "dev":
+			mode = build.ModeDevelopment
+		case "production", "prod":
+			mode = build.ModeProduction
+		case "test":
+			mode = build.ModeTest
+		default:
+			return fmt.Errorf("invalid build mode: %s (valid: development, production, test)", buildMode)
 		}
 
-		if len(cdtFiles) == 0 {
-			return fmt.Errorf("no .cdt files found in app/ directory")
+		// Configure build options
+		opts := &build.BuildOptions{
+			Mode:       mode,
+			OutputPath: buildOutput,
+			SourceDir:  "app",
+			BuildDir:   "build",
+			Parallel:   true,
+			MaxJobs:    buildJobs,
+			Verbose:    buildVerbose,
+			Watch:      buildWatch,
+			UseCache:   !buildNoCache,
+			Minify:     buildMinify,
+			TreeShake:  buildTreeShake,
 		}
 
+		// Progress callback
 		if buildVerbose {
-			fmt.Printf("Found %d .cdt file(s)\n", len(cdtFiles))
-		}
-
-		// Combine all resources from all files
-		allResources := make([]*ast.ResourceNode, 0)
-		var allErrors []errors.CompilerError
-
-		for _, file := range cdtFiles {
-			if buildVerbose {
-				fmt.Printf("Compiling %s...\n", file)
+			opts.ProgressFunc = func(current, total int, message string) {
+				fmt.Printf("[%d/%d] %s\n", current, total, message)
 			}
-
-			// Read source
-			source, err := os.ReadFile(file)
-			if err != nil {
-				return fmt.Errorf("failed to read %s: %w", file, err)
-			}
-
-			// Lex
-			lex := lexer.New(string(source))
-			tokens, lexErrors := lex.ScanTokens()
-
-			if len(lexErrors) > 0 {
-				for _, lexErr := range lexErrors {
-					allErrors = append(allErrors, errors.CompilerError{
-						Phase:    "lexer",
-						Code:     "LEX001",
-						Message:  lexErr.Message,
-						Severity: errors.Error,
-						Location: errors.SourceLocation{
-							File:   file,
-							Line:   lexErr.Line,
-							Column: lexErr.Column,
-						},
-					})
+		} else {
+			opts.ProgressFunc = func(current, total int, message string) {
+				if current == total {
+					fmt.Printf("✓ %s\n", message)
 				}
-				continue
 			}
-
-			// Parse
-			p := parser.New(tokens)
-			program, parseErrors := p.Parse()
-
-			if len(parseErrors) > 0 {
-				for _, parseErr := range parseErrors {
-					allErrors = append(allErrors, errors.CompilerError{
-						Phase:    "parser",
-						Code:     "PARSE001",
-						Message:  parseErr.Message,
-						Severity: errors.Error,
-						Location: errors.SourceLocation{
-							File:   file,
-							Line:   parseErr.Token.Line,
-							Column: parseErr.Token.Column,
-						},
-					})
-				}
-				continue
-			}
-
-			// Add resources to combined list
-			allResources = append(allResources, program.Resources...)
 		}
 
-		// Stop if there were errors
-		if len(allErrors) > 0 {
-			if buildJSON {
-				outputErrorsJSON(allErrors)
-			} else {
-				outputErrorsTerminal(allErrors)
-			}
-			return fmt.Errorf("compilation failed")
-		}
-
-		// Create combined program
-		program := &ast.Program{
-			Resources: allResources,
-		}
-
-		// Type check
-		tc := typechecker.NewTypeChecker()
-		typeErrors := tc.CheckProgram(program)
-
-		if len(typeErrors) > 0 {
-			// Convert type checker errors to compiler errors
-			for _, typeErr := range typeErrors {
-				allErrors = append(allErrors, errors.CompilerError{
-					Phase:    "type_checker",
-					Code:     "TYPE001",
-					Message:  typeErr.Error(),
-					Severity: errors.Error,
-					Location: errors.SourceLocation{
-						File:   "<source>",
-						Line:   0,
-						Column: 0,
-					},
-				})
-			}
-
-			if buildJSON {
-				outputErrorsJSON(allErrors)
-			} else {
-				outputErrorsTerminal(allErrors)
-			}
-			return fmt.Errorf("type checking failed")
-		}
-
-		// Generate Go code
-		if buildVerbose {
-			fmt.Println("Generating Go code...")
-		}
-
-		gen := codegen.NewGenerator()
-		files, err := gen.GenerateProgram(program)
+		// Create build system
+		sys, err := build.NewSystem(opts)
 		if err != nil {
-			return fmt.Errorf("code generation failed: %w", err)
+			return fmt.Errorf("failed to create build system: %w", err)
 		}
 
-		// Create build/generated directory
-		generatedDir := "build/generated"
-		if err := os.MkdirAll(generatedDir, 0755); err != nil {
-			return fmt.Errorf("failed to create build directory: %w", err)
+		// Run build
+		ctx := context.Background()
+		result, err := sys.Build(ctx)
+		if err != nil {
+			return fmt.Errorf("build failed: %w", err)
 		}
 
-		// Write generated files
-		for filename, content := range files {
-			fullPath := filepath.Join(generatedDir, filename)
-
-			// Create subdirectories if needed
-			if err := os.MkdirAll(filepath.Dir(fullPath), 0755); err != nil {
-				return fmt.Errorf("failed to create directory for %s: %w", filename, err)
+		// Check for compilation errors
+		if !result.Success {
+			if buildJSON {
+				outputBuildErrorsJSON(result.Errors)
+			} else {
+				outputBuildErrorsTerminal(result.Errors)
 			}
+			return fmt.Errorf("compilation failed with %d error(s)", len(result.Errors))
+		}
 
-			if err := os.WriteFile(fullPath, []byte(content), 0644); err != nil {
-				return fmt.Errorf("failed to write %s: %w", filename, err)
+		// Print success message
+		if !buildJSON {
+			fmt.Printf("\n✓ Build successful in %.2fs\n", result.Duration.Seconds())
+			fmt.Printf("  Binary: %s\n", result.OutputPath)
+			fmt.Printf("  Metadata: %s\n", result.MetadataPath)
+			fmt.Printf("  Files compiled: %d\n", result.FilesCompiled)
+			if result.CacheHits > 0 {
+				fmt.Printf("  Cache hits: %d\n", result.CacheHits)
 			}
-
-			if buildVerbose {
-				fmt.Printf("  Generated %s\n", filename)
-			}
+		} else {
+			outputBuildSuccessJSON(result)
 		}
-
-		// Build Go binary
-		if buildVerbose {
-			fmt.Println("Building binary...")
-		}
-
-		buildCmd := exec.Command("go", "build", "-o", "build/app", "./build/generated")
-		buildCmd.Stdout = os.Stdout
-		buildCmd.Stderr = os.Stderr
-
-		if err := buildCmd.Run(); err != nil {
-			return fmt.Errorf("go build failed: %w", err)
-		}
-
-		elapsed := time.Since(startTime)
-		fmt.Printf("\n✓ Build successful in %.2fs\n", elapsed.Seconds())
-		fmt.Println("  Binary: build/app")
 
 		return nil
 	},
 }
 
+func outputBuildErrorsJSON(errs []build.BuildError) {
+	output := struct {
+		Success bool               `json:"success"`
+		Errors  []build.BuildError `json:"errors"`
+	}{
+		Success: false,
+		Errors:  errs,
+	}
+
+	encoder := json.NewEncoder(os.Stdout)
+	encoder.SetIndent("", "  ")
+	encoder.Encode(output)
+}
+
+func outputBuildErrorsTerminal(errs []build.BuildError) {
+	fmt.Fprintf(os.Stderr, "\nCompilation failed with %d error(s):\n\n", len(errs))
+
+	for i, err := range errs {
+		fmt.Fprintf(os.Stderr, "%d. [%s] %s:%d:%d\n",
+			i+1, err.Phase, err.File, err.Line, err.Column)
+		fmt.Fprintf(os.Stderr, "   %s\n", err.Message)
+
+		if i < len(errs)-1 {
+			fmt.Fprintln(os.Stderr, strings.Repeat("-", 60))
+		}
+	}
+	fmt.Fprintln(os.Stderr)
+}
+
+func outputBuildSuccessJSON(result *build.BuildResult) {
+	output := struct {
+		Success       bool    `json:"success"`
+		OutputPath    string  `json:"output_path"`
+		MetadataPath  string  `json:"metadata_path"`
+		Duration      float64 `json:"duration_seconds"`
+		FilesCompiled int     `json:"files_compiled"`
+		CacheHits     int     `json:"cache_hits"`
+	}{
+		Success:       true,
+		OutputPath:    result.OutputPath,
+		MetadataPath:  result.MetadataPath,
+		Duration:      result.Duration.Seconds(),
+		FilesCompiled: result.FilesCompiled,
+		CacheHits:     result.CacheHits,
+	}
+
+	encoder := json.NewEncoder(os.Stdout)
+	encoder.SetIndent("", "  ")
+	encoder.Encode(output)
+}
+
 func outputErrorsJSON(errs []errors.CompilerError) {
 	output := struct {
-		Success bool                    `json:"success"`
-		Errors  []errors.CompilerError  `json:"errors"`
+		Success bool                   `json:"success"`
+		Errors  []errors.CompilerError `json:"errors"`
 	}{
 		Success: false,
 		Errors:  errs,
