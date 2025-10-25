@@ -1,10 +1,9 @@
 package main
 
 import (
-	"fmt"
 	"os"
 
-	"github.com/spf13/cobra"
+	"github.com/conduit-lang/conduit/internal/cli/commands"
 )
 
 var (
@@ -16,22 +15,13 @@ var (
 )
 
 func main() {
-	rootCmd := &cobra.Command{
-		Use:   "conduit",
-		Short: "Conduit programming language compiler and tooling",
-		Long: `Conduit is an LLM-first programming language for building web applications.
-It compiles to Go and provides explicit syntax optimized for AI-assisted development.`,
-	}
+	// Set version info in commands package
+	commands.Version = Version
+	commands.GitCommit = GitCommit
+	commands.BuildDate = BuildDate
+	commands.GoVersion = GoVersion
 
-	// Add subcommands
-	rootCmd.AddCommand(versionCmd)
-	rootCmd.AddCommand(newCmd)
-	rootCmd.AddCommand(buildCmd)
-	rootCmd.AddCommand(runCmd)
-	rootCmd.AddCommand(migrateCmd)
-
-	if err := rootCmd.Execute(); err != nil {
-		fmt.Fprintln(os.Stderr, err)
+	if err := commands.Execute(); err != nil {
 		os.Exit(1)
 	}
 }

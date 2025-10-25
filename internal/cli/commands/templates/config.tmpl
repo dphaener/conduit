@@ -1,0 +1,17 @@
+# Conduit project configuration
+project_name: {{.ProjectName}}
+
+# Database configuration
+database:
+  # Connection string format: postgresql://user:password@localhost:5432/dbname
+  url: ${DATABASE_URL}
+
+# Server configuration
+server:
+  port: 3000
+  host: localhost
+
+# Build configuration
+build:
+  output: build/app
+  generated_dir: build/generated
