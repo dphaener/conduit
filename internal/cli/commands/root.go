@@ -40,6 +40,7 @@ Features:
 	rootCmd.AddCommand(NewNewCommand())
 	rootCmd.AddCommand(NewBuildCommand())
 	rootCmd.AddCommand(NewRunCommand())
+	rootCmd.AddCommand(NewWatchCommand())
 	rootCmd.AddCommand(NewMigrateCommand())
 	rootCmd.AddCommand(NewGenerateCommand())
 	rootCmd.AddCommand(NewLSPCommand())
