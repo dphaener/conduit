@@ -116,6 +116,33 @@ func (si *SymbolIndex) FindReferences(name string) []Location {
 	return locations
 }
 
+// SearchSymbols searches for symbols matching a query across all documents
+func (si *SymbolIndex) SearchSymbols(query string) []*IndexedSymbol {
+	si.mutex.RLock()
+	defer si.mutex.RUnlock()
+
+	if query == "" {
+		// Return all symbols if query is empty
+		result := make([]*IndexedSymbol, 0)
+		for _, syms := range si.symbols {
+			result = append(result, syms...)
+		}
+		return result
+	}
+
+	query = strings.ToLower(query)
+	result := make([]*IndexedSymbol, 0)
+
+	for name, syms := range si.symbols {
+		// Case-insensitive substring match
+		if strings.Contains(strings.ToLower(name), query) {
+			result = append(result, syms...)
+		}
+	}
+
+	return result
+}
+
 // extractSymbols extracts all symbols from a document's AST
 func (a *API) extractSymbols(doc *Document) []*Symbol {
 	if doc.AST == nil {

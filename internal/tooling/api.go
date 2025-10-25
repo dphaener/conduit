@@ -479,6 +479,11 @@ func (a *API) GetDocumentSymbols(uri string) ([]*Symbol, error) {
 	return doc.Symbols, nil
 }
 
+// GetWorkspaceSymbols searches for symbols across all documents in the workspace
+func (a *API) GetWorkspaceSymbols(query string) []*IndexedSymbol {
+	return a.symbolIndex.SearchSymbols(query)
+}
+
 // Helper functions
 
 func diagnosticSeverityFromTypeError(err *typechecker.TypeError) DiagnosticSeverity {

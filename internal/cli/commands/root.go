@@ -42,6 +42,7 @@ Features:
 	rootCmd.AddCommand(NewRunCommand())
 	rootCmd.AddCommand(NewMigrateCommand())
 	rootCmd.AddCommand(NewGenerateCommand())
+	rootCmd.AddCommand(NewLSPCommand())
 
 	return rootCmd
 }

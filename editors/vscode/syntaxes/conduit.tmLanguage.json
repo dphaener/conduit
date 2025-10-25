@@ -1,0 +1,220 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Conduit",
+  "scopeName": "source.conduit",
+  "patterns": [
+    {
+      "include": "#comments"
+    },
+    {
+      "include": "#resource"
+    },
+    {
+      "include": "#annotations"
+    },
+    {
+      "include": "#keywords"
+    },
+    {
+      "include": "#strings"
+    },
+    {
+      "include": "#numbers"
+    },
+    {
+      "include": "#types"
+    },
+    {
+      "include": "#operators"
+    },
+    {
+      "include": "#namespaces"
+    }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.triple-slash.conduit",
+          "match": "///.*$"
+        },
+        {
+          "name": "comment.line.double-slash.conduit",
+          "match": "//.*$"
+        },
+        {
+          "name": "comment.block.conduit",
+          "begin": "/\\*",
+          "end": "\\*/"
+        }
+      ]
+    },
+    "resource": {
+      "patterns": [
+        {
+          "match": "\\b(resource)\\s+([A-Z][A-Za-z0-9_]*)",
+          "captures": {
+            "1": {
+              "name": "keyword.declaration.resource.conduit"
+            },
+            "2": {
+              "name": "entity.name.type.resource.conduit"
+            }
+          }
+        }
+      ]
+    },
+    "annotations": {
+      "patterns": [
+        {
+          "match": "@(before|after)\\s+(create|update|delete|save)",
+          "captures": {
+            "0": {
+              "name": "meta.annotation.hook.conduit"
+            },
+            "1": {
+              "name": "storage.type.annotation.conduit"
+            },
+            "2": {
+              "name": "keyword.other.hook.conduit"
+            }
+          }
+        },
+        {
+          "match": "@(primary|auto|auto_update|unique|transaction|async)",
+          "name": "storage.type.annotation.conduit"
+        },
+        {
+          "match": "@(min|max|default|pattern)\\s*\\(",
+          "captures": {
+            "1": {
+              "name": "storage.type.annotation.conduit"
+            }
+          }
+        },
+        {
+          "match": "@(validate|constraint|scope|computed)\\s+([a-z_][a-z0-9_]*)",
+          "captures": {
+            "1": {
+              "name": "storage.type.annotation.conduit"
+            },
+            "2": {
+              "name": "entity.name.function.conduit"
+            }
+          }
+        }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "name": "keyword.control.conduit",
+          "match": "\\b(if|elsif|else|match|when|return)\\b"
+        },
+        {
+          "name": "keyword.other.conduit",
+          "match": "\\b(let|self|on|condition|error|foreign_key|on_delete|through|cascade|restrict|set_null)\\b"
+        }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        {
+          "name": "string.quoted.double.conduit",
+          "begin": "\"",
+          "end": "\"",
+          "patterns": [
+            {
+              "name": "constant.character.escape.conduit",
+              "match": "\\\\."
+            }
+          ]
+        },
+        {
+          "name": "string.quoted.single.conduit",
+          "begin": "'",
+          "end": "'",
+          "patterns": [
+            {
+              "name": "constant.character.escape.conduit",
+              "match": "\\\\."
+            }
+          ]
+        }
+      ]
+    },
+    "numbers": {
+      "patterns": [
+        {
+          "name": "constant.numeric.decimal.conduit",
+          "match": "\\b\\d+\\.\\d+\\b"
+        },
+        {
+          "name": "constant.numeric.integer.conduit",
+          "match": "\\b\\d+\\b"
+        }
+      ]
+    },
+    "types": {
+      "patterns": [
+        {
+          "match": "\\b(string|text|markdown|int|float|decimal|bool|timestamp|date|time|uuid|ulid|email|url|phone|json|array|hash|enum)([!?])",
+          "captures": {
+            "1": {
+              "name": "entity.name.type.conduit"
+            },
+            "2": {
+              "name": "keyword.operator.nullability.conduit"
+            }
+          }
+        },
+        {
+          "match": "\\b([A-Z][A-Za-z0-9_]*)([!?])",
+          "captures": {
+            "1": {
+              "name": "entity.name.type.resource.conduit"
+            },
+            "2": {
+              "name": "keyword.operator.nullability.conduit"
+            }
+          }
+        }
+      ]
+    },
+    "operators": {
+      "patterns": [
+        {
+          "name": "keyword.operator.comparison.conduit",
+          "match": "(==|!=|<=|>=|<|>)"
+        },
+        {
+          "name": "keyword.operator.logical.conduit",
+          "match": "(&&|\\|\\||!)"
+        },
+        {
+          "name": "keyword.operator.arithmetic.conduit",
+          "match": "(\\+|-|\\*|/|%)"
+        },
+        {
+          "name": "keyword.operator.assignment.conduit",
+          "match": "="
+        }
+      ]
+    },
+    "namespaces": {
+      "patterns": [
+        {
+          "match": "\\b(String|Time|Array|Hash|Math|JSON)\\.([a-z_][a-z0-9_]*)",
+          "captures": {
+            "1": {
+              "name": "support.class.namespace.conduit"
+            },
+            "2": {
+              "name": "support.function.conduit"
+            }
+          }
+        }
+      ]
+    }
+  }
+}
