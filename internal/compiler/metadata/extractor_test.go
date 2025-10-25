@@ -510,3 +510,95 @@ func TestExtractor_ComplexTypes(t *testing.T) {
 		t.Errorf("Metadata type = %v, want hash<string!,string!>?", metadataField.Type)
 	}
 }
+
+func TestExtractor_RelationshipKinds(t *testing.T) {
+	tests := []struct {
+		kind     ast.RelationshipKind
+		expected string
+	}{
+		{ast.RelationshipBelongsTo, "belongs_to"},
+		{ast.RelationshipHasMany, "has_many"},
+		{ast.RelationshipHasManyThrough, "has_many_through"},
+		{ast.RelationshipHasOne, "has_one"},
+	}
+
+	extractor := NewExtractor("1.0.0")
+	for _, tt := range tests {
+		result := extractor.formatRelationshipKind(tt.kind)
+		if result != tt.expected {
+			t.Errorf("formatRelationshipKind(%v) = %q, want %q", tt.kind, result, tt.expected)
+		}
+	}
+}
+
+func TestExtractor_StructTypes(t *testing.T) {
+	prog := &ast.Program{
+		Resources: []*ast.ResourceNode{
+			{
+				Name: "Config",
+				Fields: []*ast.FieldNode{
+					{
+						Name: "settings",
+						Type: &ast.TypeNode{
+							Kind: ast.TypeStruct,
+							StructFields: []*ast.FieldNode{
+								{
+									Name: "theme",
+									Type: &ast.TypeNode{
+										Kind:     ast.TypePrimitive,
+										Name:     "string",
+										Nullable: false,
+									},
+								},
+								{
+									Name: "notifications",
+									Type: &ast.TypeNode{
+										Kind:     ast.TypePrimitive,
+										Name:     "bool",
+										Nullable: false,
+									},
+								},
+							},
+							Nullable: false,
+						},
+						Nullable: false,
+					},
+					{
+						Name: "emptyStruct",
+						Type: &ast.TypeNode{
+							Kind:         ast.TypeStruct,
+							StructFields: []*ast.FieldNode{},
+							Nullable:     true,
+						},
+						Nullable: true,
+					},
+				},
+			},
+		},
+	}
+
+	extractor := NewExtractor("1.0.0")
+	meta, err := extractor.Extract(prog)
+
+	if err != nil {
+		t.Fatalf("Extract() error = %v", err)
+	}
+
+	resource := meta.Resources[0]
+	if len(resource.Fields) != 2 {
+		t.Fatalf("Fields count = %v, want 2", len(resource.Fields))
+	}
+
+	// Check struct type with fields
+	settingsField := resource.Fields[0]
+	expectedType := "struct{theme: string!, notifications: bool!}!"
+	if settingsField.Type != expectedType {
+		t.Errorf("Settings type = %v, want %v", settingsField.Type, expectedType)
+	}
+
+	// Check empty struct type
+	emptyStructField := resource.Fields[1]
+	if emptyStructField.Type != "struct{}?" {
+		t.Errorf("EmptyStruct type = %v, want struct{}?", emptyStructField.Type)
+	}
+}

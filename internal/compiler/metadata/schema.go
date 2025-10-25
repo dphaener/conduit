@@ -6,16 +6,19 @@ import "encoding/json"
 
 // Metadata represents the complete introspection metadata for a Conduit application
 type Metadata struct {
-	Version   string             `json:"version"`
-	Resources []ResourceMetadata `json:"resources"`
-	Patterns  []PatternMetadata  `json:"patterns"`
-	Routes    []RouteMetadata    `json:"routes"`
+	Version    string             `json:"version"`
+	SourceHash string             `json:"source_hash"` // Hash of all source files for change detection
+	Resources  []ResourceMetadata `json:"resources"`
+	Patterns   []PatternMetadata  `json:"patterns"`
+	Routes     []RouteMetadata    `json:"routes"`
 }
 
 // ResourceMetadata describes a resource and its components
 type ResourceMetadata struct {
 	Name          string                 `json:"name"`
 	Documentation string                 `json:"documentation,omitempty"`
+	FilePath      string                 `json:"file_path,omitempty"`      // Source file path
+	Line          int                    `json:"line,omitempty"`           // Line number in source
 	Fields        []FieldMetadata        `json:"fields"`
 	Relationships []RelationshipMetadata `json:"relationships,omitempty"`
 	Hooks         []HookMetadata         `json:"hooks,omitempty"`
@@ -53,6 +56,8 @@ type HookMetadata struct {
 	Event          string   `json:"event"`           // create, update, delete, save
 	HasTransaction bool     `json:"has_transaction"` // @transaction annotation
 	HasAsync       bool     `json:"has_async"`       // @async annotation
+	SourceCode     string   `json:"source_code,omitempty"` // Hook body as source code
+	Line           int      `json:"line,omitempty"`  // Line number in source
 	Middleware     []string `json:"middleware,omitempty"`
 }
 
