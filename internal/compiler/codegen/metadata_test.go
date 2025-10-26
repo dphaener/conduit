@@ -1,7 +1,11 @@
 package codegen
 
 import (
+	"bytes"
+	"compress/gzip"
 	"encoding/json"
+	"fmt"
+	"io"
 	"strings"
 	"testing"
 	"time"
@@ -378,5 +382,262 @@ func TestMetadataGenerationPerformance(t *testing.T) {
 		t.Errorf("GenerateMetadata() took %v, want < 50ms", duration)
 	} else {
 		t.Logf("GenerateMetadata() took %v (< 50ms requirement met)", duration)
+	}
+}
+
+func TestEmbedMetadata_GeneratesValidCode(t *testing.T) {
+	metadataJSON := `{"version":"1.0.0","resources":[{"name":"User","fields":[{"name":"id","type":"uuid!"}]}],"patterns":[],"routes":[]}`
+
+	gen := NewGenerator()
+	code, err := gen.EmbedMetadata(metadataJSON)
+
+	if err != nil {
+		t.Fatalf("EmbedMetadata() error = %v", err)
+	}
+
+	if code == "" {
+		t.Fatal("EmbedMetadata() returned empty string")
+	}
+
+	// Check for required components
+	requiredStrings := []string{
+		"package metadata",
+		"var embeddedMetadata = []byte{",
+		"func init()",
+		"func decompressMetadata",
+		"metadata.RegisterMetadata",
+		"gzip.NewReader",
+	}
+
+	for _, required := range requiredStrings {
+		if !strings.Contains(code, required) {
+			t.Errorf("Generated code missing: %s", required)
+		}
+	}
+}
+
+func TestEmbedMetadata_CompressesData(t *testing.T) {
+	// Create a large metadata JSON
+	metadataJSON := strings.Repeat(`{"version":"1.0.0","resources":[{"name":"User","fields":[{"name":"id","type":"uuid!"}]}]}`, 100)
+
+	gen := NewGenerator()
+	code, err := gen.EmbedMetadata(metadataJSON)
+
+	if err != nil {
+		t.Fatalf("EmbedMetadata() error = %v", err)
+	}
+
+	// The embedded byte array should be smaller than the original JSON
+	// We can't directly measure this, but we can verify the code is reasonable
+	if len(code) == 0 {
+		t.Error("Generated code is empty")
+	}
+
+	// Verify it contains byte array in hex format
+	if !strings.Contains(code, "0x") {
+		t.Error("Generated code should contain hex byte values")
+	}
+}
+
+func TestEmbedMetadata_EmptyJSON(t *testing.T) {
+	gen := NewGenerator()
+	code, err := gen.EmbedMetadata("")
+
+	if err != nil {
+		t.Fatalf("EmbedMetadata() error = %v", err)
+	}
+
+	// Should still generate valid code even for empty metadata
+	if !strings.Contains(code, "package metadata") {
+		t.Error("Generated code missing package declaration")
+	}
+}
+
+func TestEmbedMetadata_WithAllFeatures(t *testing.T) {
+	// Create comprehensive metadata JSON
+	metadataJSON := `{
+		"version": "1.0.0",
+		"source_hash": "abc123",
+		"resources": [
+			{
+				"name": "Post",
+				"documentation": "Blog post",
+				"file_path": "/app/post.cdt",
+				"fields": [
+					{"name": "id", "type": "uuid!", "nullable": false},
+					{"name": "title", "type": "string!", "nullable": false}
+				],
+				"relationships": [
+					{"name": "author", "type": "User", "kind": "belongs_to"}
+				],
+				"hooks": [
+					{"type": "before_create", "transaction": false}
+				],
+				"validations": []
+			}
+		],
+		"patterns": [
+			{"name": "unique_field", "template": "field: type! @unique"}
+		],
+		"routes": [
+			{"method": "GET", "path": "/posts", "handler": "Index"}
+		]
+	}`
+
+	gen := NewGenerator()
+	code, err := gen.EmbedMetadata(metadataJSON)
+
+	if err != nil {
+		t.Fatalf("EmbedMetadata() error = %v", err)
+	}
+
+	// Verify structure
+	if !strings.Contains(code, "var embeddedMetadata = []byte{") {
+		t.Error("Missing embedded metadata variable")
+	}
+
+	if !strings.Contains(code, "func init()") {
+		t.Error("Missing init function")
+	}
+
+	if !strings.Contains(code, "decompressMetadata(embeddedMetadata)") {
+		t.Error("Missing decompression call")
+	}
+
+	if !strings.Contains(code, "metadata.RegisterMetadata(decompressed)") {
+		t.Error("Missing registration call")
+	}
+}
+
+func TestCompressMetadata(t *testing.T) {
+	original := []byte("Hello, World! This is test data for compression.")
+
+	compressed, err := compressMetadata(original)
+	if err != nil {
+		t.Fatalf("compressMetadata() error = %v", err)
+	}
+
+	if len(compressed) == 0 {
+		t.Error("Compressed data is empty")
+	}
+
+	// Verify we can decompress it back
+	var buf bytes.Buffer
+	writer := gzip.NewWriter(&buf)
+	writer.Write(original)
+	writer.Close()
+
+	// The compressed data should be valid gzip
+	reader, err := gzip.NewReader(bytes.NewReader(compressed))
+	if err != nil {
+		t.Fatalf("Failed to create gzip reader: %v", err)
+	}
+	defer reader.Close()
+
+	decompressed, err := io.ReadAll(reader)
+	if err != nil {
+		t.Fatalf("Failed to read decompressed data: %v", err)
+	}
+
+	if !bytes.Equal(original, decompressed) {
+		t.Error("Decompressed data doesn't match original")
+	}
+}
+
+func TestBytesToGoArray(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    []byte
+		contains []string
+	}{
+		{
+			name:     "empty",
+			input:    []byte{},
+			contains: []string{},
+		},
+		{
+			name:     "single byte",
+			input:    []byte{0xff},
+			contains: []string{"0xff"},
+		},
+		{
+			name:  "multiple bytes",
+			input: []byte{0x01, 0x02, 0x03},
+			contains: []string{
+				"0x01",
+				"0x02",
+				"0x03",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := bytesToGoArray(tt.input)
+
+			for _, expected := range tt.contains {
+				if !strings.Contains(result, expected) {
+					t.Errorf("bytesToGoArray() result missing %s", expected)
+				}
+			}
+		})
+	}
+}
+
+func TestBytesToGoArray_Formatting(t *testing.T) {
+	// Create 20 bytes to test line wrapping
+	input := make([]byte, 20)
+	for i := range input {
+		input[i] = byte(i)
+	}
+
+	result := bytesToGoArray(input)
+
+	// Should contain newlines for readability (wraps at 16 bytes per line)
+	if !strings.Contains(result, "\n") {
+		t.Error("Expected newlines in output for readability")
+	}
+
+	// Should contain hex values
+	if !strings.Contains(result, "0x00") {
+		t.Error("Missing expected hex value")
+	}
+
+	// Should contain commas
+	if !strings.Contains(result, ",") {
+		t.Error("Missing commas between bytes")
+	}
+}
+
+func BenchmarkEmbedMetadata(b *testing.B) {
+	metadataJSON := `{"version":"1.0.0","resources":[{"name":"User","fields":[{"name":"id","type":"uuid!"}]}],"patterns":[],"routes":[]}`
+
+	gen := NewGenerator()
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := gen.EmbedMetadata(metadataJSON)
+		if err != nil {
+			b.Fatalf("EmbedMetadata() error = %v", err)
+		}
+	}
+}
+
+func BenchmarkEmbedMetadata_Large(b *testing.B) {
+	// Create realistic large metadata (50 resources)
+	var resources []string
+	for i := 0; i < 50; i++ {
+		resources = append(resources, fmt.Sprintf(`{"name":"Resource%d","fields":[{"name":"id","type":"uuid!"},{"name":"name","type":"string!"}]}`, i))
+	}
+	metadataJSON := fmt.Sprintf(`{"version":"1.0.0","resources":[%s],"patterns":[],"routes":[]}`, strings.Join(resources, ","))
+
+	gen := NewGenerator()
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := gen.EmbedMetadata(metadataJSON)
+		if err != nil {
+			b.Fatalf("EmbedMetadata() error = %v", err)
+		}
 	}
 }

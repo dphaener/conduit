@@ -1,6 +1,8 @@
 package codegen
 
 import (
+	"bytes"
+	"compress/gzip"
 	"fmt"
 	"strings"
 
@@ -171,4 +173,138 @@ func (g *Generator) GenerateMetadataAccessor(metadataJSON string) (string, error
 // escapeBackticks escapes backticks in a string for use in Go raw string literals
 func escapeBackticks(s string) string {
 	return strings.ReplaceAll(s, "`", "` + \"`\" + `")
+}
+
+// EmbedMetadata generates Go code that embeds compressed metadata as a byte array.
+// The generated code includes an init() function that decompresses and registers
+// the metadata at application startup.
+func (g *Generator) EmbedMetadata(metadataJSON string) (string, error) {
+	// Compress the metadata
+	compressed, err := compressMetadata([]byte(metadataJSON))
+	if err != nil {
+		return "", fmt.Errorf("failed to compress metadata: %w", err)
+	}
+
+	// Convert to Go byte array literal
+	byteArray := bytesToGoArray(compressed)
+
+	g.reset()
+
+	// Package declaration
+	g.writeLine("// Package metadata provides embedded introspection metadata")
+	g.writeLine("package metadata")
+	g.writeLine("")
+
+	// Imports
+	g.writeLine("import (")
+	g.indent++
+	g.writeLine("%q", "bytes")
+	g.writeLine("%q", "compress/gzip")
+	g.writeLine("%q", "fmt")
+	g.writeLine("%q", "io")
+	g.writeLine("")
+	g.writeLine("%q", "github.com/conduit-lang/conduit/runtime/metadata")
+	g.indent--
+	g.writeLine(")")
+	g.writeLine("")
+
+	// Embedded metadata as byte array
+	g.writeLine("// embeddedMetadata contains compressed introspection metadata")
+	g.writeLine("// Generated at compile time - DO NOT EDIT")
+	g.writeLine("var embeddedMetadata = []byte{")
+	g.indent++
+	g.writeLine("%s,", byteArray)
+	g.indent--
+	g.writeLine("}")
+	g.writeLine("")
+
+	// init function
+	g.writeLine("// init decompresses and registers metadata at application startup")
+	g.writeLine("func init() {")
+	g.indent++
+	g.writeLine("// Decompress metadata")
+	g.writeLine("decompressed, err := decompressMetadata(embeddedMetadata)")
+	g.writeLine("if err != nil {")
+	g.indent++
+	g.writeLine("panic(fmt.Sprintf(\"Failed to decompress embedded metadata: %%v\", err))")
+	g.indent--
+	g.writeLine("}")
+	g.writeLine("")
+	g.writeLine("// Register with runtime")
+	g.writeLine("if err := metadata.RegisterMetadata(decompressed); err != nil {")
+	g.indent++
+	g.writeLine("panic(fmt.Sprintf(\"Failed to register metadata: %%v\", err))")
+	g.indent--
+	g.writeLine("}")
+	g.indent--
+	g.writeLine("}")
+	g.writeLine("")
+
+	// decompressMetadata helper function
+	g.writeLine("// decompressMetadata decompresses gzip-compressed metadata")
+	g.writeLine("func decompressMetadata(data []byte) ([]byte, error) {")
+	g.indent++
+	g.writeLine("reader, err := gzip.NewReader(bytes.NewReader(data))")
+	g.writeLine("if err != nil {")
+	g.indent++
+	g.writeLine("return nil, err")
+	g.indent--
+	g.writeLine("}")
+	g.writeLine("defer reader.Close()")
+	g.writeLine("")
+	g.writeLine("// Protect against decompression bombs with 10MB limit")
+	g.writeLine("const maxMetadataSize = 10 * 1024 * 1024 // 10MB max")
+	g.writeLine("decompressed, err := io.ReadAll(io.LimitReader(reader, maxMetadataSize))")
+	g.writeLine("if err != nil {")
+	g.indent++
+	g.writeLine("return nil, err")
+	g.indent--
+	g.writeLine("}")
+	g.writeLine("")
+	g.writeLine("return decompressed, nil")
+	g.indent--
+	g.writeLine("}")
+
+	return g.buf.String(), nil
+}
+
+// compressMetadata compresses data using gzip with best compression
+func compressMetadata(data []byte) ([]byte, error) {
+	var buf bytes.Buffer
+	writer, err := gzip.NewWriterLevel(&buf, gzip.BestCompression)
+	if err != nil {
+		return nil, err
+	}
+
+	if _, err := writer.Write(data); err != nil {
+		writer.Close()
+		return nil, err
+	}
+
+	if err := writer.Close(); err != nil {
+		return nil, err
+	}
+
+	return buf.Bytes(), nil
+}
+
+// bytesToGoArray converts a byte slice to a Go byte array literal
+func bytesToGoArray(data []byte) string {
+	if len(data) == 0 {
+		return ""
+	}
+
+	var buf strings.Builder
+
+	// Write bytes in groups of 16 per line for readability
+	for i, b := range data {
+		if i > 0 && i%16 == 0 {
+			buf.WriteString(",\n\t")
+		} else if i > 0 {
+			buf.WriteString(", ")
+		}
+		buf.WriteString(fmt.Sprintf("0x%02x", b))
+	}
+
+	return buf.String()
 }
