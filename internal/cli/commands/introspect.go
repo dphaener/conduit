@@ -179,17 +179,305 @@ resources, middleware, and routes.`,
   # Filter by dependency type
   conduit introspect deps Post --type resource`,
 		Args: cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return fmt.Errorf("not yet implemented - requires runtime registry")
-		},
+		RunE: runIntrospectDepsCommand,
 	}
 
 	// Add command-specific flags
-	cmd.Flags().Int("depth", 1, "Traversal depth for dependency tree")
+	cmd.Flags().Int("depth", 1, "Traversal depth for dependency tree (max: 5)")
 	cmd.Flags().Bool("reverse", false, "Show only reverse dependencies")
 	cmd.Flags().String("type", "", "Filter by type: resource, middleware, or function")
 
 	return cmd
+}
+
+// runIntrospectDepsCommand executes the 'introspect deps <resource>' command
+func runIntrospectDepsCommand(cmd *cobra.Command, args []string) error {
+	resourceName := args[0]
+
+	// Get flag values
+	depth, _ := cmd.Flags().GetInt("depth")
+	reverse, _ := cmd.Flags().GetBool("reverse")
+	typeFilter, _ := cmd.Flags().GetString("type")
+
+	// Validate depth
+	if depth < 1 || depth > 5 {
+		return fmt.Errorf("depth must be between 1 and 5, got: %d", depth)
+	}
+
+	// Validate type filter if specified
+	validTypes := map[string]bool{
+		"resource":   true,
+		"middleware": true,
+		"function":   true,
+	}
+	var types []string
+	if typeFilter != "" {
+		if !validTypes[typeFilter] {
+			return fmt.Errorf("invalid type filter: %s (valid: resource, middleware, function)", typeFilter)
+		}
+		// Map CLI type names to relationship types
+		switch typeFilter {
+		case "resource":
+			types = []string{"belongs_to", "has_many", "has_many_through"}
+		case "middleware":
+			types = []string{"uses"}
+		case "function":
+			types = []string{"calls"}
+		}
+	}
+
+	// Build dependency options
+	opts := metadata.DependencyOptions{
+		Depth:   depth,
+		Reverse: reverse,
+		Types:   types,
+	}
+
+	// Query dependencies
+	graph, err := metadata.QueryDependencies(resourceName, opts)
+	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			return handleResourceNotFound(resourceName, cmd.OutOrStdout())
+		}
+		if strings.Contains(err.Error(), "not initialized") {
+			return fmt.Errorf("registry not initialized - run 'conduit build' first to generate metadata")
+		}
+		return err
+	}
+
+	// Get the output writer
+	writer := cmd.OutOrStdout()
+
+	// Format output based on the format flag
+	if outputFormat == "json" {
+		return formatDependenciesAsJSON(graph, writer)
+	}
+
+	// Default: table format
+	return formatDependenciesAsTable(graph, resourceName, opts, writer)
+}
+
+// DependencyGroup groups dependencies by their type
+type DependencyGroup struct {
+	Type  string
+	Edges []metadata.DependencyEdge
+}
+
+// groupDependenciesByType groups dependency edges by node type
+func groupDependenciesByType(graph *metadata.DependencyGraph, reverse bool) map[string][]metadata.DependencyEdge {
+	groups := make(map[string][]metadata.DependencyEdge)
+
+	for _, edge := range graph.Edges {
+		// Determine the target node type
+		var targetNodeID string
+		if reverse {
+			targetNodeID = edge.From
+		} else {
+			targetNodeID = edge.To
+		}
+
+		if node, exists := graph.Nodes[targetNodeID]; exists {
+			groups[node.Type] = append(groups[node.Type], edge)
+		}
+	}
+
+	return groups
+}
+
+// getImpactDescription generates a human-readable impact description for a dependency
+func getImpactDescription(edge metadata.DependencyEdge, graph *metadata.DependencyGraph, resourceName string, reverse bool) string {
+	// Get source resource metadata
+	var sourceRes *metadata.ResourceMetadata
+
+	if reverse {
+		sourceRes, _ = metadata.QueryResource(edge.From)
+	} else {
+		sourceRes, _ = metadata.QueryResource(resourceName)
+	}
+
+	// Handle relationship-based impacts
+	if edge.Relationship == "belongs_to" || edge.Relationship == "has_many" || edge.Relationship == "has_many_through" {
+		// Find the relationship metadata to get on_delete behavior
+		var relMeta *metadata.RelationshipMetadata
+		if sourceRes != nil {
+			for i := range sourceRes.Relationships {
+				rel := &sourceRes.Relationships[i]
+				// Match both the target resource AND relationship type
+				if rel.TargetResource == edge.To && rel.Type == edge.Relationship {
+					relMeta = rel
+					break
+				}
+			}
+		}
+
+		if relMeta != nil {
+			switch relMeta.OnDelete {
+			case "cascade":
+				if reverse {
+					return fmt.Sprintf("Deleting %s cascades to %s", resourceName, edge.From)
+				}
+				return fmt.Sprintf("Deleting %s cascades to %s", edge.To, resourceName)
+			case "restrict":
+				if reverse {
+					return fmt.Sprintf("Cannot delete %s with existing %s", resourceName, edge.From)
+				}
+				return fmt.Sprintf("Cannot delete %s with existing %s", edge.To, resourceName)
+			case "set_null":
+				if reverse {
+					return fmt.Sprintf("Deleting %s nullifies %s.%s", resourceName, edge.From, relMeta.ForeignKey)
+				}
+				return fmt.Sprintf("Deleting %s nullifies %s.%s", edge.To, resourceName, relMeta.ForeignKey)
+			}
+		}
+
+		// Default for relationships without explicit on_delete
+		if edge.Relationship == "belongs_to" {
+			if reverse {
+				return fmt.Sprintf("Deleting %s affects %s records", resourceName, edge.From)
+			}
+			return fmt.Sprintf("%s requires %s", resourceName, edge.To)
+		}
+		return fmt.Sprintf("%s relationship", edge.Relationship)
+	}
+
+	// Handle middleware usage
+	if edge.Relationship == "uses" {
+		return "Applied to operations"
+	}
+
+	// Handle function calls
+	if edge.Relationship == "calls" {
+		return "Called from hooks"
+	}
+
+	return ""
+}
+
+// formatDependenciesAsTable formats dependency graph as a human-readable table
+func formatDependenciesAsTable(graph *metadata.DependencyGraph, resourceName string, opts metadata.DependencyOptions, writer io.Writer) error {
+	bold := color.New(color.Bold)
+	cyan := color.New(color.FgCyan)
+	yellow := color.New(color.FgYellow)
+
+	// Header
+	bold.Fprintf(writer, "DEPENDENCIES: %s\n\n", resourceName)
+
+	// Show direct dependencies (what resource uses) unless --reverse is specified
+	if !opts.Reverse {
+		cyan.Fprintln(writer, "━━━ DIRECT DEPENDENCIES (what "+resourceName+" uses) ━━━━━━")
+		fmt.Fprintln(writer)
+
+		// Group dependencies by type
+		groups := groupDependenciesByType(graph, false)
+
+		// Show resources
+		if resourceEdges, ok := groups["resource"]; ok && len(resourceEdges) > 0 {
+			bold.Fprintln(writer, "Resources:")
+			for _, edge := range resourceEdges {
+				targetNode := graph.Nodes[edge.To]
+				fmt.Fprintf(writer, "└─ %s (%s)\n", targetNode.Name, edge.Relationship)
+
+				impact := getImpactDescription(edge, graph, resourceName, false)
+				if impact != "" {
+					yellow.Fprintf(writer, "   Impact: %s\n", impact)
+				}
+			}
+			fmt.Fprintln(writer)
+		}
+
+		// Show middleware
+		if middlewareEdges, ok := groups["middleware"]; ok && len(middlewareEdges) > 0 {
+			bold.Fprintln(writer, "Middleware:")
+			for _, edge := range middlewareEdges {
+				targetNode := graph.Nodes[edge.To]
+				fmt.Fprintf(writer, "└─ %s\n", targetNode.Name)
+			}
+			fmt.Fprintln(writer)
+		}
+
+		// Show functions
+		if functionEdges, ok := groups["function"]; ok && len(functionEdges) > 0 {
+			bold.Fprintln(writer, "Functions:")
+			for _, edge := range functionEdges {
+				targetNode := graph.Nodes[edge.To]
+				fmt.Fprintf(writer, "└─ %s\n", targetNode.Name)
+			}
+			fmt.Fprintln(writer)
+		}
+
+		if len(groups) == 0 {
+			fmt.Fprintln(writer, "No direct dependencies")
+			fmt.Fprintln(writer)
+		}
+	}
+
+	// Show reverse dependencies (what uses resource)
+	// Always shown: in default mode (both directions) or when --reverse is specified
+	{
+		// Query reverse dependencies
+		reverseOpts := metadata.DependencyOptions{
+			Depth:   opts.Depth,
+			Reverse: true,
+			Types:   opts.Types,
+		}
+
+		reverseGraph, err := metadata.QueryDependencies(resourceName, reverseOpts)
+		if err != nil {
+			return err
+		}
+
+		cyan.Fprintln(writer, "━━━ REVERSE DEPENDENCIES (what uses "+resourceName+") ━━━━━━")
+		fmt.Fprintln(writer)
+
+		// Group reverse dependencies by type
+		reverseGroups := groupDependenciesByType(reverseGraph, true)
+
+		// Show resources
+		if resourceEdges, ok := reverseGroups["resource"]; ok && len(resourceEdges) > 0 {
+			bold.Fprintln(writer, "Resources:")
+			for _, edge := range resourceEdges {
+				sourceNode := reverseGraph.Nodes[edge.From]
+				fmt.Fprintf(writer, "└─ %s (via %s to %s)\n", sourceNode.Name, edge.Relationship, resourceName)
+
+				impact := getImpactDescription(edge, reverseGraph, resourceName, true)
+				if impact != "" {
+					yellow.Fprintf(writer, "   Impact: %s\n", impact)
+				}
+			}
+			fmt.Fprintln(writer)
+		}
+
+		// Show routes that use this resource
+		allRoutes := metadata.QueryRoutes()
+		resourceRoutes := []metadata.RouteMetadata{}
+		for _, route := range allRoutes {
+			if route.Resource == resourceName {
+				resourceRoutes = append(resourceRoutes, route)
+			}
+		}
+
+		if len(resourceRoutes) > 0 {
+			bold.Fprintln(writer, "Routes:")
+			for _, route := range resourceRoutes {
+				fmt.Fprintf(writer, "└─ %s %s\n", route.Method, route.Path)
+			}
+			fmt.Fprintln(writer)
+		}
+
+		if len(reverseGroups) == 0 && len(resourceRoutes) == 0 {
+			fmt.Fprintln(writer, "No reverse dependencies")
+			fmt.Fprintln(writer)
+		}
+	}
+
+	return nil
+}
+
+// formatDependenciesAsJSON formats dependency graph as JSON
+func formatDependenciesAsJSON(graph *metadata.DependencyGraph, writer io.Writer) error {
+	encoder := json.NewEncoder(writer)
+	encoder.SetIndent("", "  ")
+	return encoder.Encode(graph)
 }
 
 // newIntrospectPatternsCommand creates the 'introspect patterns' command
