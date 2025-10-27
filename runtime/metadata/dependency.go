@@ -20,8 +20,10 @@ type DependencyOptions struct {
 // BuildDependencyGraph constructs a complete dependency graph from metadata
 func BuildDependencyGraph(meta *Metadata) *DependencyGraph {
 	graph := &DependencyGraph{
-		Nodes: make(map[string]*DependencyNode),
-		Edges: make([]DependencyEdge, 0),
+		Nodes:         make(map[string]*DependencyNode),
+		Edges:         make([]DependencyEdge, 0),
+		outgoingEdges: make(map[string][]DependencyEdge),
+		incomingEdges: make(map[string][]DependencyEdge),
 	}
 
 	if meta == nil {
@@ -132,6 +134,12 @@ func BuildDependencyGraph(meta *Metadata) *DependencyGraph {
 		}
 	}
 
+	// Build adjacency lists for fast traversal
+	for _, edge := range graph.Edges {
+		graph.outgoingEdges[edge.From] = append(graph.outgoingEdges[edge.From], edge)
+		graph.incomingEdges[edge.To] = append(graph.incomingEdges[edge.To], edge)
+	}
+
 	// Detect and warn about circular dependencies
 	WarnCircularDependencies(graph)
 
@@ -173,8 +181,10 @@ func QueryDependencies(resourceName string, opts DependencyOptions) (*Dependency
 // extractSubgraph extracts a subgraph using BFS traversal
 func extractSubgraph(fullGraph *DependencyGraph, startNode string, opts DependencyOptions) *DependencyGraph {
 	result := &DependencyGraph{
-		Nodes: make(map[string]*DependencyNode),
-		Edges: make([]DependencyEdge, 0),
+		Nodes:         make(map[string]*DependencyNode),
+		Edges:         make([]DependencyEdge, 0),
+		outgoingEdges: make(map[string][]DependencyEdge),
+		incomingEdges: make(map[string][]DependencyEdge),
 	}
 
 	visited := make(map[string]bool)
@@ -231,6 +241,12 @@ func extractSubgraph(fullGraph *DependencyGraph, startNode string, opts Dependen
 		}
 	}
 
+	// Build adjacency lists for the subgraph
+	for _, edge := range result.Edges {
+		result.outgoingEdges[edge.From] = append(result.outgoingEdges[edge.From], edge)
+		result.incomingEdges[edge.To] = append(result.incomingEdges[edge.To], edge)
+	}
+
 	return result
 }
 
@@ -240,8 +256,12 @@ type depthNode struct {
 	depth int
 }
 
-// findOutgoingEdges finds all edges from a node
+// findOutgoingEdges finds all edges from a node using pre-computed adjacency list
 func findOutgoingEdges(graph *DependencyGraph, nodeID string) []DependencyEdge {
+	if graph.outgoingEdges != nil {
+		return graph.outgoingEdges[nodeID]
+	}
+	// Fallback to linear search if adjacency lists not built
 	var result []DependencyEdge
 	for _, edge := range graph.Edges {
 		if edge.From == nodeID {
@@ -251,8 +271,12 @@ func findOutgoingEdges(graph *DependencyGraph, nodeID string) []DependencyEdge {
 	return result
 }
 
-// findIncomingEdges finds all edges to a node
+// findIncomingEdges finds all edges to a node using pre-computed adjacency list
 func findIncomingEdges(graph *DependencyGraph, nodeID string) []DependencyEdge {
+	if graph.incomingEdges != nil {
+		return graph.incomingEdges[nodeID]
+	}
+	// Fallback to linear search if adjacency lists not built
 	var result []DependencyEdge
 	for _, edge := range graph.Edges {
 		if edge.To == nodeID {
