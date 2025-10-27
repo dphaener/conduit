@@ -578,20 +578,29 @@ func TestBuildDependencyGraph_WithMiddleware(t *testing.T) {
 		t.Errorf("AuthMiddleware has wrong type: %s", graph.Nodes["AuthMiddleware"].Type)
 	}
 
-	// Verify edges exist (should be 3 edges: Post->Auth for list, Post->RateLimit for list, Post->Auth for create)
-	// Note: we may have duplicates, so let's count unique edges
-	edgeCount := 0
+	// Verify edges exist (should be 2 deduplicated edges with correct weights)
+	// Post->AuthMiddleware (weight=2, used in list and create)
+	// Post->RateLimitMiddleware (weight=1, used in list)
+	if len(graph.Edges) != 2 {
+		t.Errorf("Expected 2 edges (deduplicated), got %d", len(graph.Edges))
+	}
+
 	foundAuthEdge := false
 	foundRateLimitEdge := false
 
 	for _, edge := range graph.Edges {
 		if edge.From == "Post" && edge.Relationship == "uses" {
-			edgeCount++
 			if edge.To == "AuthMiddleware" {
 				foundAuthEdge = true
+				if edge.Weight != 2 {
+					t.Errorf("Expected AuthMiddleware edge weight=2 (used in 2 operations), got %d", edge.Weight)
+				}
 			}
 			if edge.To == "RateLimitMiddleware" {
 				foundRateLimitEdge = true
+				if edge.Weight != 1 {
+					t.Errorf("Expected RateLimitMiddleware edge weight=1, got %d", edge.Weight)
+				}
 			}
 		}
 	}
@@ -602,10 +611,6 @@ func TestBuildDependencyGraph_WithMiddleware(t *testing.T) {
 
 	if !foundRateLimitEdge {
 		t.Error("Expected edge from Post to RateLimitMiddleware")
-	}
-
-	if edgeCount != 3 {
-		t.Errorf("Expected 3 middleware edges, got %d", edgeCount)
 	}
 }
 
@@ -655,6 +660,58 @@ func TestExtractFunctionCalls_NoMatches(t *testing.T) {
 
 	if len(functions) != 0 {
 		t.Errorf("Expected 0 functions, got %d: %v", len(functions), functions)
+	}
+}
+
+func TestExtractFunctionCalls_AllCapsNamespace(t *testing.T) {
+	sourceCode := `
+        id = UUID.generate()
+        response = HTTP.request()
+        data = JSON.parse()
+    `
+
+	functions := extractFunctionCalls(sourceCode)
+
+	expected := []string{"UUID.generate", "HTTP.request", "JSON.parse"}
+	if len(functions) != len(expected) {
+		t.Errorf("Expected %d functions, got %d", len(expected), len(functions))
+	}
+
+	for _, exp := range expected {
+		found := false
+		for _, fn := range functions {
+			if fn == exp {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("Expected to find function call: %s", exp)
+		}
+	}
+}
+
+func TestExtractFunctionCalls_CamelCaseFunction(t *testing.T) {
+	sourceCode := `
+        text = String.toUpperCase(input)
+        result = Array.forEach(items)
+    `
+
+	functions := extractFunctionCalls(sourceCode)
+
+	if len(functions) != 2 {
+		t.Errorf("Expected 2 functions, got %d", len(functions))
+	}
+
+	expected := map[string]bool{
+		"String.toUpperCase": true,
+		"Array.forEach":      true,
+	}
+
+	for _, fn := range functions {
+		if !expected[fn] {
+			t.Errorf("Unexpected function: %s", fn)
+		}
 	}
 }
 
@@ -884,4 +941,63 @@ func TestWarnCircularDependencies_WithCycles(t *testing.T) {
 
 	// Should log warning but not panic
 	WarnCircularDependencies(graph)
+}
+
+func TestBuildDependencyGraph_EdgeWeights(t *testing.T) {
+	meta := &Metadata{
+		Version: "1.0.0",
+		Resources: []ResourceMetadata{
+			{
+				Name: "Post",
+				Middleware: map[string][]string{
+					"list":   {"AuthMiddleware"},
+					"create": {"AuthMiddleware"},
+					"update": {"AuthMiddleware"},
+					"delete": {"AuthMiddleware"},
+				},
+				Hooks: []HookMetadata{
+					{
+						Type:       "before_create",
+						SourceCode: "self.slug = String.slugify(self.title)",
+					},
+					{
+						Type:       "after_create",
+						SourceCode: "self.slug = String.slugify(self.description)",
+					},
+				},
+			},
+		},
+	}
+
+	graph := BuildDependencyGraph(meta)
+
+	// Should have 2 edges: Post->AuthMiddleware and Post->String.slugify
+	if len(graph.Edges) != 2 {
+		t.Errorf("Expected 2 edges, got %d", len(graph.Edges))
+	}
+
+	// AuthMiddleware should have weight=4 (used in 4 operations)
+	foundAuthEdge := false
+	foundSlugifyEdge := false
+	for _, edge := range graph.Edges {
+		if edge.To == "AuthMiddleware" {
+			foundAuthEdge = true
+			if edge.Weight != 4 {
+				t.Errorf("Expected AuthMiddleware weight=4, got %d", edge.Weight)
+			}
+		}
+		if edge.To == "String.slugify" {
+			foundSlugifyEdge = true
+			if edge.Weight != 2 {
+				t.Errorf("Expected String.slugify weight=2, got %d", edge.Weight)
+			}
+		}
+	}
+
+	if !foundAuthEdge {
+		t.Error("Expected edge to AuthMiddleware")
+	}
+	if !foundSlugifyEdge {
+		t.Error("Expected edge to String.slugify")
+	}
 }

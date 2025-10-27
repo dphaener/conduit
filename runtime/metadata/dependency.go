@@ -7,6 +7,9 @@ import (
 	"strings"
 )
 
+// functionCallPattern matches namespaced function calls like String.slugify, UUID.generate, HTTP.request
+var functionCallPattern = regexp.MustCompile(`([A-Z][A-Za-z0-9]*\.[a-z][a-zA-Z0-9]*)\(`)
+
 // DependencyOptions configures dependency graph queries
 type DependencyOptions struct {
 	Depth   int      // Maximum traversal depth (0 = unlimited)
@@ -57,6 +60,9 @@ func BuildDependencyGraph(meta *Metadata) *DependencyGraph {
 		}
 	}
 
+	// Track edges to handle duplicates - key: "from->to:relationship", value: index in edges array
+	edgeMap := make(map[string]int)
+
 	// Add edges for middleware usage
 	for _, resource := range meta.Resources {
 		for _, middlewareList := range resource.Middleware {
@@ -70,14 +76,22 @@ func BuildDependencyGraph(meta *Metadata) *DependencyGraph {
 					}
 				}
 
-				// Add edge
-				edge := DependencyEdge{
-					From:         resource.Name,
-					To:           middleware,
-					Relationship: "uses",
-					Weight:       1,
+				// Check for existing edge
+				edgeKey := fmt.Sprintf("%s->%s:uses", resource.Name, middleware)
+				if idx, exists := edgeMap[edgeKey]; exists {
+					// Increment weight of existing edge
+					graph.Edges[idx].Weight++
+				} else {
+					// Add new edge
+					edge := DependencyEdge{
+						From:         resource.Name,
+						To:           middleware,
+						Relationship: "uses",
+						Weight:       1,
+					}
+					edgeMap[edgeKey] = len(graph.Edges)
+					graph.Edges = append(graph.Edges, edge)
 				}
-				graph.Edges = append(graph.Edges, edge)
 			}
 		}
 	}
@@ -98,14 +112,22 @@ func BuildDependencyGraph(meta *Metadata) *DependencyGraph {
 					}
 				}
 
-				// Add edge
-				edge := DependencyEdge{
-					From:         resource.Name,
-					To:           funcName,
-					Relationship: "calls",
-					Weight:       1,
+				// Check for existing edge
+				edgeKey := fmt.Sprintf("%s->%s:calls", resource.Name, funcName)
+				if idx, exists := edgeMap[edgeKey]; exists {
+					// Increment weight of existing edge
+					graph.Edges[idx].Weight++
+				} else {
+					// Add new edge
+					edge := DependencyEdge{
+						From:         resource.Name,
+						To:           funcName,
+						Relationship: "calls",
+						Weight:       1,
+					}
+					edgeMap[edgeKey] = len(graph.Edges)
+					graph.Edges = append(graph.Edges, edge)
 				}
-				graph.Edges = append(graph.Edges, edge)
 			}
 		}
 	}
@@ -377,8 +399,9 @@ func extractFunctionCalls(sourceCode string) []string {
 	var functions []string
 	lines := strings.Split(sourceCode, "\n")
 	for _, line := range lines {
-		// Look for pattern: Word.Word(
-		matches := regexp.MustCompile(`([A-Z][a-z]+\.[a-z]+)\(`).FindAllStringSubmatch(line, -1)
+		// Look for pattern: Namespace.function( where Namespace can be all caps (UUID, HTTP)
+		// and function can be camelCase (toUpperCase, forEach)
+		matches := functionCallPattern.FindAllStringSubmatch(line, -1)
 		for _, match := range matches {
 			if len(match) > 1 {
 				functions = append(functions, match[1])
