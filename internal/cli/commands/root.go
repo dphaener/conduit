@@ -48,6 +48,8 @@ Features:
 	rootCmd.AddCommand(NewFormatCommand())
 	rootCmd.AddCommand(NewTemplateCommand())
 	rootCmd.AddCommand(NewDocsCommand())
+	rootCmd.AddCommand(NewIntrospectCommand())
+	rootCmd.AddCommand(NewCompletionCommand())
 
 	return rootCmd
 }
