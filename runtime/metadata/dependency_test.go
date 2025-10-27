@@ -1001,3 +1001,217 @@ func TestBuildDependencyGraph_EdgeWeights(t *testing.T) {
 		t.Error("Expected edge to String.slugify")
 	}
 }
+
+// BenchmarkQueryDependencies_Depth1_Cold benchmarks depth=1 queries (cold cache)
+func BenchmarkQueryDependencies_Depth1_Cold(b *testing.B) {
+	meta := generateDeepDependencyChain(10)
+	data, _ := json.Marshal(meta)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		b.StopTimer()
+		Reset()
+		RegisterMetadata(data)
+		b.StartTimer()
+
+		opts := DependencyOptions{Depth: 1}
+		_, err := QueryDependencies("Resource0", opts)
+		if err != nil {
+			b.Fatalf("QueryDependencies failed: %v", err)
+		}
+	}
+}
+
+// BenchmarkQueryDependencies_Depth1_Cached benchmarks depth=1 queries (cached)
+func BenchmarkQueryDependencies_Depth1_Cached(b *testing.B) {
+	defer Reset()
+
+	meta := generateDeepDependencyChain(10)
+	data, _ := json.Marshal(meta)
+	RegisterMetadata(data)
+
+	opts := DependencyOptions{Depth: 1}
+
+	// Warm up cache
+	QueryDependencies("Resource0", opts)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := QueryDependencies("Resource0", opts)
+		if err != nil {
+			b.Fatalf("QueryDependencies failed: %v", err)
+		}
+	}
+}
+
+// BenchmarkQueryDependencies_Depth3_Cold benchmarks depth=3 queries (cold cache)
+func BenchmarkQueryDependencies_Depth3_Cold(b *testing.B) {
+	meta := generateDeepDependencyChain(10)
+	data, _ := json.Marshal(meta)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		b.StopTimer()
+		Reset()
+		RegisterMetadata(data)
+		b.StartTimer()
+
+		opts := DependencyOptions{Depth: 3}
+		_, err := QueryDependencies("Resource0", opts)
+		if err != nil {
+			b.Fatalf("QueryDependencies failed: %v", err)
+		}
+	}
+}
+
+// BenchmarkQueryDependencies_Depth3_Cached benchmarks depth=3 queries (cached)
+func BenchmarkQueryDependencies_Depth3_Cached(b *testing.B) {
+	defer Reset()
+
+	meta := generateDeepDependencyChain(10)
+	data, _ := json.Marshal(meta)
+	RegisterMetadata(data)
+
+	opts := DependencyOptions{Depth: 3}
+
+	// Warm up cache
+	QueryDependencies("Resource0", opts)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := QueryDependencies("Resource0", opts)
+		if err != nil {
+			b.Fatalf("QueryDependencies failed: %v", err)
+		}
+	}
+}
+
+// BenchmarkQueryDependencies_Depth5_Cold benchmarks depth=5 queries (cold cache)
+func BenchmarkQueryDependencies_Depth5_Cold(b *testing.B) {
+	meta := generateDeepDependencyChain(20)
+	data, _ := json.Marshal(meta)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		b.StopTimer()
+		Reset()
+		RegisterMetadata(data)
+		b.StartTimer()
+
+		opts := DependencyOptions{Depth: 5}
+		_, err := QueryDependencies("Resource0", opts)
+		if err != nil {
+			b.Fatalf("QueryDependencies failed: %v", err)
+		}
+	}
+}
+
+// BenchmarkQueryDependencies_Depth5_Cached benchmarks depth=5 queries (cached)
+func BenchmarkQueryDependencies_Depth5_Cached(b *testing.B) {
+	defer Reset()
+
+	meta := generateDeepDependencyChain(20)
+	data, _ := json.Marshal(meta)
+	RegisterMetadata(data)
+
+	opts := DependencyOptions{Depth: 5}
+
+	// Warm up cache
+	QueryDependencies("Resource0", opts)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := QueryDependencies("Resource0", opts)
+		if err != nil {
+			b.Fatalf("QueryDependencies failed: %v", err)
+		}
+	}
+}
+
+// BenchmarkBuildDependencyGraph_WithAdjacencyLists measures adjacency list construction overhead
+func BenchmarkBuildDependencyGraph_WithAdjacencyLists(b *testing.B) {
+	meta := generateDeepDependencyChain(50)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		graph := BuildDependencyGraph(meta)
+		if graph.outgoingEdges == nil {
+			b.Fatal("Adjacency lists not built")
+		}
+	}
+}
+
+// generateDeepDependencyChain creates a chain of resources with deep dependencies
+func generateDeepDependencyChain(n int) *Metadata {
+	meta := &Metadata{
+		Version:   "1.0.0",
+		Resources: make([]ResourceMetadata, n),
+	}
+
+	for i := 0; i < n; i++ {
+		resource := ResourceMetadata{
+			Name: fmt.Sprintf("Resource%d", i),
+		}
+
+		// Create a dependency chain: Resource0 -> Resource1 -> Resource2 -> ...
+		if i > 0 {
+			resource.Relationships = []RelationshipMetadata{
+				{
+					Name:           "dependency",
+					TargetResource: fmt.Sprintf("Resource%d", i-1),
+					Type:           "belongs_to",
+				},
+			}
+		}
+
+		// Also add a few branching relationships for more complexity
+		if i > 1 && i%3 == 0 {
+			resource.Relationships = append(resource.Relationships,
+				RelationshipMetadata{
+					Name:           "alternate",
+					TargetResource: fmt.Sprintf("Resource%d", i-2),
+					Type:           "belongs_to",
+				},
+			)
+		}
+
+		meta.Resources[i] = resource
+	}
+
+	return meta
+}
+
+func TestFindEdges_Fallback(t *testing.T) {
+	// Test fallback when adjacency lists are nil
+	graph := &DependencyGraph{
+		Nodes: map[string]*DependencyNode{
+			"A": {ID: "A", Type: "resource", Name: "A"},
+			"B": {ID: "B", Type: "resource", Name: "B"},
+			"C": {ID: "C", Type: "resource", Name: "C"},
+		},
+		Edges: []DependencyEdge{
+			{From: "A", To: "B", Relationship: "belongs_to"},
+			{From: "A", To: "C", Relationship: "has_many"},
+		},
+		// Do NOT initialize adjacency lists
+		outgoingEdges: nil,
+		incomingEdges: nil,
+	}
+
+	// Test findOutgoingEdges fallback
+	edges := findOutgoingEdges(graph, "A")
+	if len(edges) != 2 {
+		t.Errorf("Fallback findOutgoingEdges failed: expected 2 edges, got %d", len(edges))
+	}
+
+	// Test findIncomingEdges fallback
+	edges = findIncomingEdges(graph, "B")
+	if len(edges) != 1 {
+		t.Errorf("Fallback findIncomingEdges failed: expected 1 edge, got %d", len(edges))
+	}
+
+	edges = findIncomingEdges(graph, "C")
+	if len(edges) != 1 {
+		t.Errorf("Fallback findIncomingEdges failed: expected 1 edge, got %d", len(edges))
+	}
+}

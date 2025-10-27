@@ -1,12 +1,151 @@
 package metadata
 
 import (
+	"container/list"
 	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
 	"sync/atomic"
 )
+
+const (
+	defaultMaxCacheEntries = 1000
+	maxCacheMemoryBytes    = 10 * 1024 * 1024 // 10MB
+)
+
+// lruCache implements an LRU cache with memory limits and hit/miss tracking
+type lruCache struct {
+	maxEntries   int
+	maxMemory    int64
+	entries      map[string]*list.Element
+	evictionList *list.List
+	currentSize  int64
+	hits         int64
+	misses       int64
+}
+
+// cacheEntry represents a single cache entry
+type cacheEntry struct {
+	key   string
+	value interface{}
+	size  int64
+}
+
+// newLRUCache creates a new LRU cache with default settings
+func newLRUCache() *lruCache {
+	return &lruCache{
+		maxEntries:   defaultMaxCacheEntries,
+		maxMemory:    maxCacheMemoryBytes,
+		entries:      make(map[string]*list.Element),
+		evictionList: list.New(),
+		currentSize:  0,
+		hits:         0,
+		misses:       0,
+	}
+}
+
+// get retrieves a value from the cache
+func (c *lruCache) get(key string) (interface{}, bool) {
+	if elem, ok := c.entries[key]; ok {
+		c.evictionList.MoveToFront(elem)
+		atomic.AddInt64(&c.hits, 1)
+		return elem.Value.(*cacheEntry).value, true
+	}
+	atomic.AddInt64(&c.misses, 1)
+	return nil, false
+}
+
+// set adds or updates a value in the cache
+func (c *lruCache) set(key string, value interface{}) {
+	// Estimate size (rough approximation)
+	size := estimateSize(value)
+
+	// If entry exists, update it
+	if elem, ok := c.entries[key]; ok {
+		entry := elem.Value.(*cacheEntry)
+		c.currentSize -= entry.size
+		entry.value = value
+		entry.size = size
+		c.currentSize += size
+		c.evictionList.MoveToFront(elem)
+		c.evictIfNeeded()
+		return
+	}
+
+	// Add new entry
+	entry := &cacheEntry{
+		key:   key,
+		value: value,
+		size:  size,
+	}
+	elem := c.evictionList.PushFront(entry)
+	c.entries[key] = elem
+	c.currentSize += size
+
+	// Evict if necessary
+	c.evictIfNeeded()
+}
+
+// evictIfNeeded removes entries if limits are exceeded
+func (c *lruCache) evictIfNeeded() {
+	for c.evictionList.Len() > c.maxEntries || c.currentSize > c.maxMemory {
+		if c.evictionList.Len() == 0 {
+			break
+		}
+		elem := c.evictionList.Back()
+		if elem != nil {
+			c.removeElement(elem)
+		}
+	}
+}
+
+// removeElement removes an element from the cache
+func (c *lruCache) removeElement(elem *list.Element) {
+	c.evictionList.Remove(elem)
+	entry := elem.Value.(*cacheEntry)
+	delete(c.entries, entry.key)
+	c.currentSize -= entry.size
+}
+
+// clear removes all entries from the cache
+func (c *lruCache) clear() {
+	c.entries = make(map[string]*list.Element)
+	c.evictionList = list.New()
+	c.currentSize = 0
+	c.hits = 0
+	c.misses = 0
+}
+
+// stats returns cache statistics
+func (c *lruCache) stats() (hits, misses int64, hitRate float64) {
+	hits = atomic.LoadInt64(&c.hits)
+	misses = atomic.LoadInt64(&c.misses)
+	total := hits + misses
+	if total > 0 {
+		hitRate = float64(hits) / float64(total)
+	}
+	return hits, misses, hitRate
+}
+
+// estimateSize estimates the memory size of a cached value
+func estimateSize(value interface{}) int64 {
+	// Rough estimation based on type
+	switch v := value.(type) {
+	case *DependencyGraph:
+		size := int64(len(v.Nodes) * 200)        // ~200 bytes per node
+		size += int64(len(v.Edges) * 100)        // ~100 bytes per edge
+		size += int64(len(v.outgoingEdges) * 50) // overhead for maps
+		size += int64(len(v.incomingEdges) * 50)
+		return size
+	case []ResourceMetadata:
+		return int64(len(v) * 500) // ~500 bytes per resource
+	case []FieldReference:
+		return int64(len(v) * 150) // ~150 bytes per field ref
+	default:
+		return 1024 // Default 1KB estimate
+	}
+}
 
 // Registry holds the runtime metadata for introspection queries.
 // It is initialized at application startup via the generated init() function.
@@ -22,8 +161,8 @@ type Registry struct {
 	patternsByName    map[string]*PatternMetadata
 	relationshipIndex map[string][]*RelationshipRef // resource name -> relationships
 
-	// Query result cache (metadata never changes at runtime)
-	cache      map[string]interface{}
+	// LRU cache for query results (metadata never changes at runtime)
+	cache      *lruCache
 	cacheMutex sync.RWMutex
 
 	// Lazy initialization state
@@ -44,7 +183,7 @@ var globalRegistry = &Registry{
 	routesByMethod:    make(map[string][]*RouteMetadata),
 	patternsByName:    make(map[string]*PatternMetadata),
 	relationshipIndex: make(map[string][]*RelationshipRef),
-	cache:             make(map[string]interface{}),
+	cache:             newLRUCache(),
 }
 
 // RegisterMetadata registers metadata in the global registry.
@@ -195,7 +334,7 @@ func Reset() {
 	globalRegistry.routesByMethod = make(map[string][]*RouteMetadata)
 	globalRegistry.patternsByName = make(map[string]*PatternMetadata)
 	globalRegistry.relationshipIndex = make(map[string][]*RelationshipRef)
-	globalRegistry.cache = make(map[string]interface{})
+	globalRegistry.cache.clear()
 	globalRegistry.initialized.Store(false)
 }
 
@@ -447,14 +586,24 @@ type FieldReference struct {
 func (r *Registry) getCached(key string) interface{} {
 	r.cacheMutex.RLock()
 	defer r.cacheMutex.RUnlock()
-	return r.cache[key]
+	if val, ok := r.cache.get(key); ok {
+		return val
+	}
+	return nil
 }
 
 // setCached stores a value in the cache
 func (r *Registry) setCached(key string, value interface{}) {
 	r.cacheMutex.Lock()
 	defer r.cacheMutex.Unlock()
-	r.cache[key] = value
+	r.cache.set(key, value)
+}
+
+// GetCacheStats returns cache hit/miss statistics
+func GetCacheStats() (hits, misses int64, hitRate float64) {
+	globalRegistry.cacheMutex.RLock()
+	defer globalRegistry.cacheMutex.RUnlock()
+	return globalRegistry.cache.stats()
 }
 
 // matchPattern matches a string against a pattern with wildcards

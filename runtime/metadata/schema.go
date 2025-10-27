@@ -135,6 +135,10 @@ type PatternExample struct {
 type DependencyGraph struct {
 	Nodes map[string]*DependencyNode `json:"nodes"` // All nodes indexed by ID
 	Edges []DependencyEdge           `json:"edges"` // All dependency edges
+
+	// Pre-computed adjacency lists for fast traversal (not serialized)
+	outgoingEdges map[string][]DependencyEdge `json:"-"` // from -> []edges
+	incomingEdges map[string][]DependencyEdge `json:"-"` // to -> []edges
 }
 
 // DependencyNode represents a single node in the dependency graph.
