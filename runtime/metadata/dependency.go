@@ -2,6 +2,9 @@ package metadata
 
 import (
 	"fmt"
+	"log"
+	"regexp"
+	"strings"
 )
 
 // DependencyOptions configures dependency graph queries
@@ -53,6 +56,62 @@ func BuildDependencyGraph(meta *Metadata) *DependencyGraph {
 			}
 		}
 	}
+
+	// Add edges for middleware usage
+	for _, resource := range meta.Resources {
+		for _, middlewareList := range resource.Middleware {
+			for _, middleware := range middlewareList {
+				// Add middleware node if not exists
+				if _, exists := graph.Nodes[middleware]; !exists {
+					graph.Nodes[middleware] = &DependencyNode{
+						ID:   middleware,
+						Type: "middleware",
+						Name: middleware,
+					}
+				}
+
+				// Add edge
+				edge := DependencyEdge{
+					From:         resource.Name,
+					To:           middleware,
+					Relationship: "uses",
+					Weight:       1,
+				}
+				graph.Edges = append(graph.Edges, edge)
+			}
+		}
+	}
+
+	// Add edges for function calls in hooks
+	for _, resource := range meta.Resources {
+		for _, hook := range resource.Hooks {
+			// Simple pattern: extract function calls from hook source code
+			// Look for patterns like "FunctionName(...)" in hook.SourceCode
+			functions := extractFunctionCalls(hook.SourceCode)
+			for _, funcName := range functions {
+				// Add function node if not exists
+				if _, exists := graph.Nodes[funcName]; !exists {
+					graph.Nodes[funcName] = &DependencyNode{
+						ID:   funcName,
+						Type: "function",
+						Name: funcName,
+					}
+				}
+
+				// Add edge
+				edge := DependencyEdge{
+					From:         resource.Name,
+					To:           funcName,
+					Relationship: "calls",
+					Weight:       1,
+				}
+				graph.Edges = append(graph.Edges, edge)
+			}
+		}
+	}
+
+	// Detect and warn about circular dependencies
+	WarnCircularDependencies(graph)
 
 	return graph
 }
@@ -304,4 +363,38 @@ func CountDependencies(resourceName string) (int, error) {
 		return 0, err
 	}
 	return len(rels), nil
+}
+
+// extractFunctionCalls extracts function calls from hook source code
+// Simple pattern matching for namespaced function calls like String.slugify, Time.now
+func extractFunctionCalls(sourceCode string) []string {
+	if sourceCode == "" {
+		return nil
+	}
+
+	// Match patterns like "Namespace.function("
+	// This is a simplified implementation - real parser would use AST
+	var functions []string
+	lines := strings.Split(sourceCode, "\n")
+	for _, line := range lines {
+		// Look for pattern: Word.Word(
+		matches := regexp.MustCompile(`([A-Z][a-z]+\.[a-z]+)\(`).FindAllStringSubmatch(line, -1)
+		for _, match := range matches {
+			if len(match) > 1 {
+				functions = append(functions, match[1])
+			}
+		}
+	}
+	return functions
+}
+
+// WarnCircularDependencies detects and logs warnings about circular dependencies
+func WarnCircularDependencies(graph *DependencyGraph) {
+	cycles := DetectCycles(graph)
+	if len(cycles) > 0 {
+		log.Printf("WARNING: Detected %d circular dependencies in resource graph", len(cycles))
+		for i, cycle := range cycles {
+			log.Printf("  Cycle %d: %s", i+1, strings.Join(cycle, " -> "))
+		}
+	}
 }
