@@ -624,11 +624,12 @@ func TestIntrospectDepsCommand(t *testing.T) {
 		assert.Equal(t, "", flag.DefValue)
 	})
 
-	t.Run("returns not implemented error", func(t *testing.T) {
+	t.Run("returns registry not initialized error", func(t *testing.T) {
+		metadata.Reset()
 		cmd := newIntrospectDepsCommand()
 		err := cmd.RunE(cmd, []string{"Post"})
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "not yet implemented")
+		assert.Contains(t, err.Error(), "registry not initialized")
 	})
 }
 
