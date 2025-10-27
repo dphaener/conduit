@@ -2,6 +2,7 @@ package metadata
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/conduit-lang/conduit/internal/compiler/ast"
@@ -342,23 +343,29 @@ func TestExtractor_Extract_Routes(t *testing.T) {
 	}
 
 	// Check route patterns
-	expectedRoutes := map[string]string{
-		"GET /users":        "Index",
-		"GET /users/:id":    "Show",
-		"POST /users":       "Create",
-		"PUT /users/:id":    "Update",
-		"DELETE /users/:id": "Delete",
+	expectedRoutes := map[string]struct {
+		handler   string
+		operation string
+	}{
+		"GET /users":        {handler: "User.list", operation: "list"},
+		"GET /users/:id":    {handler: "User.get", operation: "get"},
+		"POST /users":       {handler: "User.create", operation: "create"},
+		"PUT /users/:id":    {handler: "User.update", operation: "update"},
+		"DELETE /users/:id": {handler: "User.delete", operation: "delete"},
 	}
 
 	for _, route := range meta.Routes {
 		key := route.Method + " " + route.Path
-		expectedHandler, ok := expectedRoutes[key]
+		expected, ok := expectedRoutes[key]
 		if !ok {
 			t.Errorf("Unexpected route: %v", key)
 			continue
 		}
-		if route.Handler != expectedHandler {
-			t.Errorf("Route %v handler = %v, want %v", key, route.Handler, expectedHandler)
+		if route.Handler != expected.handler {
+			t.Errorf("Route %v handler = %v, want %v", key, route.Handler, expected.handler)
+		}
+		if route.Operation != expected.operation {
+			t.Errorf("Route %v operation = %v, want %v", key, route.Operation, expected.operation)
 		}
 		if route.Resource != "User" {
 			t.Errorf("Route %v resource = %v, want User", key, route.Resource)
@@ -600,5 +607,325 @@ func TestExtractor_StructTypes(t *testing.T) {
 	emptyStructField := resource.Fields[1]
 	if emptyStructField.Type != "struct{}?" {
 		t.Errorf("EmptyStruct type = %v, want struct{}?", emptyStructField.Type)
+	}
+}
+func TestExtractor_GenerateRoutes_StandardRoutes(t *testing.T) {
+	prog := &ast.Program{
+		Resources: []*ast.ResourceNode{
+			{
+				Name: "Post",
+				Fields: []*ast.FieldNode{
+					{
+						Name:     "title",
+						Type:     &ast.TypeNode{Kind: ast.TypePrimitive, Name: "string", Nullable: false},
+						Nullable: false,
+					},
+				},
+				Middleware: []string{"auth", "cache(300)"},
+			},
+		},
+	}
+
+	extractor := NewExtractor("1.0.0")
+	meta, err := extractor.Extract(prog)
+
+	if err != nil {
+		t.Fatalf("Extract() error = %v", err)
+	}
+
+	// Should generate 5 standard REST routes
+	if len(meta.Routes) != 5 {
+		t.Fatalf("Routes count = %v, want 5", len(meta.Routes))
+	}
+
+	// Verify routes are generated with correct structure
+	expectedRoutes := map[string]struct {
+		method    string
+		path      string
+		handler   string
+		operation string
+	}{
+		"list": {
+			method:    "GET",
+			path:      "/posts",
+			handler:   "Post.list",
+			operation: "list",
+		},
+		"get": {
+			method:    "GET",
+			path:      "/posts/:id",
+			handler:   "Post.get",
+			operation: "get",
+		},
+		"create": {
+			method:    "POST",
+			path:      "/posts",
+			handler:   "Post.create",
+			operation: "create",
+		},
+		"update": {
+			method:    "PUT",
+			path:      "/posts/:id",
+			handler:   "Post.update",
+			operation: "update",
+		},
+		"delete": {
+			method:    "DELETE",
+			path:      "/posts/:id",
+			handler:   "Post.delete",
+			operation: "delete",
+		},
+	}
+
+	for _, route := range meta.Routes {
+		expected, ok := expectedRoutes[route.Operation]
+		if !ok {
+			t.Errorf("Unexpected route operation: %v", route.Operation)
+			continue
+		}
+
+		if route.Method != expected.method {
+			t.Errorf("Route %v method = %v, want %v", route.Operation, route.Method, expected.method)
+		}
+		if route.Path != expected.path {
+			t.Errorf("Route %v path = %v, want %v", route.Operation, route.Path, expected.path)
+		}
+		if route.Handler != expected.handler {
+			t.Errorf("Route %v handler = %v, want %v", route.Operation, route.Handler, expected.handler)
+		}
+		if route.Resource != "Post" {
+			t.Errorf("Route %v resource = %v, want Post", route.Operation, route.Resource)
+		}
+
+		// Check middleware is applied
+		if len(route.Middleware) != 2 {
+			t.Errorf("Route %v middleware count = %v, want 2", route.Operation, len(route.Middleware))
+		}
+	}
+}
+
+func TestExtractor_GenerateRoutes_WithOperationsRestriction(t *testing.T) {
+	prog := &ast.Program{
+		Resources: []*ast.ResourceNode{
+			{
+				Name:       "Post",
+				Operations: []string{"list", "get"}, // Only allow list and get
+				Fields: []*ast.FieldNode{
+					{
+						Name:     "title",
+						Type:     &ast.TypeNode{Kind: ast.TypePrimitive, Name: "string", Nullable: false},
+						Nullable: false,
+					},
+				},
+			},
+		},
+	}
+
+	extractor := NewExtractor("1.0.0")
+	meta, err := extractor.Extract(prog)
+
+	if err != nil {
+		t.Fatalf("Extract() error = %v", err)
+	}
+
+	// Should only generate 2 routes (list and get)
+	if len(meta.Routes) != 2 {
+		t.Fatalf("Routes count = %v, want 2", len(meta.Routes))
+	}
+
+	operations := make(map[string]bool)
+	for _, route := range meta.Routes {
+		operations[route.Operation] = true
+	}
+
+	// Verify only list and get operations exist
+	if !operations["list"] {
+		t.Error("Missing list operation")
+	}
+	if !operations["get"] {
+		t.Error("Missing get operation")
+	}
+	if operations["create"] || operations["update"] || operations["delete"] {
+		t.Error("Should not have create, update, or delete operations")
+	}
+}
+
+func TestExtractor_GenerateRoutes_NestedResources(t *testing.T) {
+	prog := &ast.Program{
+		Resources: []*ast.ResourceNode{
+			{
+				Name: "Post",
+				Fields: []*ast.FieldNode{
+					{
+						Name:     "title",
+						Type:     &ast.TypeNode{Kind: ast.TypePrimitive, Name: "string", Nullable: false},
+						Nullable: false,
+					},
+				},
+				Relationships: []*ast.RelationshipNode{
+					{
+						Name: "comments",
+						Type: "Comment",
+						Kind: ast.RelationshipHasMany,
+					},
+				},
+			},
+		},
+	}
+
+	extractor := NewExtractor("1.0.0")
+	meta, err := extractor.Extract(prog)
+
+	if err != nil {
+		t.Fatalf("Extract() error = %v", err)
+	}
+
+	// Should generate 5 standard routes + 1 nested route
+	if len(meta.Routes) != 6 {
+		t.Fatalf("Routes count = %v, want 6", len(meta.Routes))
+	}
+
+	// Find the nested route
+	var nestedRoute *RouteMetadata
+	for i := range meta.Routes {
+		if meta.Routes[i].Operation == "list_comments" {
+			nestedRoute = &meta.Routes[i]
+			break
+		}
+	}
+
+	if nestedRoute == nil {
+		t.Fatal("Nested route not found")
+	}
+
+	if nestedRoute.Method != "GET" {
+		t.Errorf("Nested route method = %v, want GET", nestedRoute.Method)
+	}
+	if nestedRoute.Path != "/posts/:id/comments" {
+		t.Errorf("Nested route path = %v, want /posts/:id/comments", nestedRoute.Path)
+	}
+	if nestedRoute.Handler != "Post.comments.list" {
+		t.Errorf("Nested route handler = %v, want Post.comments.list", nestedRoute.Handler)
+	}
+	if nestedRoute.Resource != "Post" {
+		t.Errorf("Nested route resource = %v, want Post", nestedRoute.Resource)
+	}
+}
+
+func TestExtractor_ToPlural(t *testing.T) {
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{"", ""}, // empty string
+		{"Post", "posts"},
+		{"Comment", "comments"},
+		{"Category", "categories"},
+		{"Person", "people"},
+		{"Child", "children"},
+		{"Man", "men"},
+		{"Woman", "women"},
+		{"Box", "boxes"},
+		{"Class", "classes"},
+		{"Dish", "dishes"},
+		{"Church", "churches"},
+		{"Status", "statuses"},
+		{"Day", "days"}, // vowel before 'y'
+	}
+
+	extractor := NewExtractor("1.0.0")
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			got := extractor.toPlural(strings.ToLower(tt.input))
+			want := tt.want
+			if got != want {
+				t.Errorf("toPlural(%v) = %v, want %v", tt.input, got, want)
+			}
+		})
+	}
+}
+
+func TestExtractor_GenerateRoutes_NoMiddleware(t *testing.T) {
+	prog := &ast.Program{
+		Resources: []*ast.ResourceNode{
+			{
+				Name: "User",
+				Fields: []*ast.FieldNode{
+					{
+						Name:     "username",
+						Type:     &ast.TypeNode{Kind: ast.TypePrimitive, Name: "string", Nullable: false},
+						Nullable: false,
+					},
+				},
+				// No middleware specified
+			},
+		},
+	}
+
+	extractor := NewExtractor("1.0.0")
+	meta, err := extractor.Extract(prog)
+
+	if err != nil {
+		t.Fatalf("Extract() error = %v", err)
+	}
+
+	// Verify routes have no middleware
+	for _, route := range meta.Routes {
+		if len(route.Middleware) != 0 {
+			t.Errorf("Route %v should have no middleware, got %v", route.Operation, route.Middleware)
+		}
+	}
+}
+
+func TestExtractor_GenerateRoutes_MultipleResources(t *testing.T) {
+	prog := &ast.Program{
+		Resources: []*ast.ResourceNode{
+			{
+				Name: "User",
+				Fields: []*ast.FieldNode{
+					{
+						Name:     "username",
+						Type:     &ast.TypeNode{Kind: ast.TypePrimitive, Name: "string", Nullable: false},
+						Nullable: false,
+					},
+				},
+			},
+			{
+				Name: "Post",
+				Fields: []*ast.FieldNode{
+					{
+						Name:     "title",
+						Type:     &ast.TypeNode{Kind: ast.TypePrimitive, Name: "string", Nullable: false},
+						Nullable: false,
+					},
+				},
+			},
+		},
+	}
+
+	extractor := NewExtractor("1.0.0")
+	meta, err := extractor.Extract(prog)
+
+	if err != nil {
+		t.Fatalf("Extract() error = %v", err)
+	}
+
+	// Should generate 5 routes per resource = 10 total
+	if len(meta.Routes) != 10 {
+		t.Fatalf("Routes count = %v, want 10", len(meta.Routes))
+	}
+
+	// Count routes by resource
+	resourceCounts := make(map[string]int)
+	for _, route := range meta.Routes {
+		resourceCounts[route.Resource]++
+	}
+
+	if resourceCounts["User"] != 5 {
+		t.Errorf("User routes count = %v, want 5", resourceCounts["User"])
+	}
+	if resourceCounts["Post"] != 5 {
+		t.Errorf("Post routes count = %v, want 5", resourceCounts["Post"])
 	}
 }

@@ -247,7 +247,7 @@ func TestMetadataRoundTrip(t *testing.T) {
 			{Name: "test_pattern", Template: "test", Occurrences: 1},
 		},
 		Routes: []metadata.RouteMetadata{
-			{Method: "GET", Path: "/users", Handler: "Index", Resource: "User"},
+			{Method: "GET", Path: "/users", Handler: "User.list", Operation: "list", Resource: "User"},
 		},
 	}
 
