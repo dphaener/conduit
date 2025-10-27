@@ -106,6 +106,7 @@ type RouteMetadata struct {
 	Path        string   `json:"path"`
 	Handler     string   `json:"handler"`
 	Resource    string   `json:"resource"`
+	Operation   string   `json:"operation"`
 	Middleware  []string `json:"middleware,omitempty"`
 	Description string   `json:"description,omitempty"`
 }

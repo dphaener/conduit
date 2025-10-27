@@ -757,53 +757,202 @@ func (e *Extractor) extractPatterns(resources []*ast.ResourceNode) []PatternMeta
 	return result
 }
 
-// generateRoutes generates REST API routes for a resource
+// generateRoutes generates REST API routes for a resource according to these rules:
+//
+// Standard Operations:
+//   - list:   GET    /resources
+//   - get:    GET    /resources/:id
+//   - create: POST   /resources
+//   - update: PUT    /resources/:id
+//   - delete: DELETE /resources/:id
+//
+// Operation Filtering:
+//   - If resource.Operations is empty, all 5 standard operations are generated
+//   - If resource.Operations is set, only specified operations are generated
+//   - Unknown operation names are silently ignored (they don't match any standard route)
+//
+// Middleware:
+//   - Resource-level middleware (resource.Middleware) is applied to all routes
+//   - Per-operation middleware (@on <op>: [mw]) is not yet supported
+//     TODO(CON-56): Implement per-operation middleware extraction when AST supports it
+//     This requires adding OperationMiddleware map[string][]string to ResourceNode
+//
+// Nested Routes:
+//   - Has-many relationships generate: GET /parents/:id/children
+//   - Handler format uses relationship name: Parent.relationshipName.list
+//     This allows the web framework to distinguish between different relationships
+//     to the same resource type (e.g., Post.comments vs Post.replies)
+//
+// Pluralization:
+//   - Resource names are pluralized for paths using simple English rules
+//   - Handles common cases: post→posts, category→categories, person→people
+//   - See toPlural() for full pluralization logic and limitations
 func (e *Extractor) generateRoutes(resource *ast.ResourceNode) {
-	resourcePath := strings.ToLower(resource.Name) + "s"
+	resourcePath := e.toPlural(strings.ToLower(resource.Name))
 
-	// Standard REST routes
-	routes := []RouteMetadata{
-		{
-			Method:      "GET",
-			Path:        "/" + resourcePath,
-			Handler:     "Index",
-			Resource:    resource.Name,
-			Middleware:  resource.Middleware,
-			Description: fmt.Sprintf("List all %s", resourcePath),
+	// Map of operation to route configuration
+	type routeConfig struct {
+		method      string
+		path        string
+		handler     string
+		operation   string
+		description string
+	}
+
+	standardRoutes := map[string]routeConfig{
+		"list": {
+			method:      "GET",
+			path:        "/" + resourcePath,
+			handler:     resource.Name + ".list",
+			operation:   "list",
+			description: fmt.Sprintf("List all %s", resourcePath),
 		},
-		{
-			Method:      "GET",
-			Path:        "/" + resourcePath + "/:id",
-			Handler:     "Show",
-			Resource:    resource.Name,
-			Middleware:  resource.Middleware,
-			Description: fmt.Sprintf("Get a single %s by ID", resource.Name),
+		"get": {
+			method:      "GET",
+			path:        "/" + resourcePath + "/:id",
+			handler:     resource.Name + ".get",
+			operation:   "get",
+			description: fmt.Sprintf("Get a single %s by ID", resource.Name),
 		},
-		{
-			Method:      "POST",
-			Path:        "/" + resourcePath,
-			Handler:     "Create",
-			Resource:    resource.Name,
-			Middleware:  resource.Middleware,
-			Description: fmt.Sprintf("Create a new %s", resource.Name),
+		"create": {
+			method:      "POST",
+			path:        "/" + resourcePath,
+			handler:     resource.Name + ".create",
+			operation:   "create",
+			description: fmt.Sprintf("Create a new %s", resource.Name),
 		},
-		{
-			Method:      "PUT",
-			Path:        "/" + resourcePath + "/:id",
-			Handler:     "Update",
-			Resource:    resource.Name,
-			Middleware:  resource.Middleware,
-			Description: fmt.Sprintf("Update an existing %s", resource.Name),
+		"update": {
+			method:      "PUT",
+			path:        "/" + resourcePath + "/:id",
+			handler:     resource.Name + ".update",
+			operation:   "update",
+			description: fmt.Sprintf("Update an existing %s", resource.Name),
 		},
-		{
-			Method:      "DELETE",
-			Path:        "/" + resourcePath + "/:id",
-			Handler:     "Delete",
-			Resource:    resource.Name,
-			Middleware:  resource.Middleware,
-			Description: fmt.Sprintf("Delete a %s", resource.Name),
+		"delete": {
+			method:      "DELETE",
+			path:        "/" + resourcePath + "/:id",
+			handler:     resource.Name + ".delete",
+			operation:   "delete",
+			description: fmt.Sprintf("Delete a %s", resource.Name),
 		},
 	}
 
-	e.routes = append(e.routes, routes...)
+	// Determine which operations to generate routes for
+	allowedOps := make(map[string]bool)
+	if len(resource.Operations) > 0 {
+		// If @operations is specified, only generate routes for those operations
+		for _, op := range resource.Operations {
+			allowedOps[op] = true
+		}
+	} else {
+		// If no @operations restriction, generate all standard routes
+		for op := range standardRoutes {
+			allowedOps[op] = true
+		}
+	}
+
+	// Generate standard REST routes
+	for opName, config := range standardRoutes {
+		if !allowedOps[opName] {
+			continue
+		}
+
+		route := RouteMetadata{
+			Method:      config.method,
+			Path:        config.path,
+			Handler:     config.handler,
+			Resource:    resource.Name,
+			Operation:   config.operation,
+			Middleware:  resource.Middleware,
+			Description: config.description,
+		}
+		e.routes = append(e.routes, route)
+	}
+
+	// Generate nested resource routes for has_many relationships
+	for _, rel := range resource.Relationships {
+		if rel.Kind == ast.RelationshipHasMany {
+			e.generateNestedRoutes(resource, rel)
+		}
+	}
+}
+
+// generateNestedRoutes generates nested routes for has_many relationships.
+// Example: GET /posts/:post_id/comments
+func (e *Extractor) generateNestedRoutes(parent *ast.ResourceNode, rel *ast.RelationshipNode) {
+	parentPath := e.toPlural(strings.ToLower(parent.Name))
+	childPath := e.toPlural(strings.ToLower(rel.Type))
+
+	// Nested list route: GET /parents/:parent_id/children
+	route := RouteMetadata{
+		Method:      "GET",
+		Path:        fmt.Sprintf("/%s/:id/%s", parentPath, childPath),
+		Handler:     fmt.Sprintf("%s.%s.list", parent.Name, rel.Name),
+		Resource:    parent.Name,
+		Operation:   fmt.Sprintf("list_%s", rel.Name),
+		Middleware:  parent.Middleware,
+		Description: fmt.Sprintf("List all %s for a %s", childPath, parent.Name),
+	}
+	e.routes = append(e.routes, route)
+}
+
+// toPlural converts a singular resource name to plural form.
+//
+// This is a simple implementation that handles common English pluralization rules:
+//   - Irregular plurals: person→people, child→children, man→men, woman→women
+//   - Words ending in consonant+y: category→categories, story→stories
+//   - Words ending in vowel+y: day→days, boy→boys
+//   - Words ending in s/ss/sh/ch/x/z: class→classes, box→boxes, church→churches
+//   - Default: add 's' (post→posts, user→users)
+//
+// Known Limitations:
+//   - Does not handle all irregular plurals (e.g., tooth→teeth, mouse→mice)
+//   - May not work correctly for words from other languages
+//   - For production use with user-defined resource names, consider using a
+//     comprehensive pluralization library like github.com/gertd/go-pluralize
+//
+// The implementation is intentionally simple to avoid external dependencies
+// while handling the most common cases in typical API resource names.
+func (e *Extractor) toPlural(singular string) string {
+	if singular == "" {
+		return ""
+	}
+
+	// Handle common irregular plurals
+	irregulars := map[string]string{
+		"person": "people",
+		"child":  "children",
+		"man":    "men",
+		"woman":  "women",
+	}
+
+	if plural, ok := irregulars[singular]; ok {
+		return plural
+	}
+
+	// Handle words ending in 'y' preceded by a consonant
+	if len(singular) >= 2 && singular[len(singular)-1] == 'y' {
+		prevChar := singular[len(singular)-2]
+		if !isVowel(prevChar) {
+			return singular[:len(singular)-1] + "ies"
+		}
+	}
+
+	// Handle words ending in 's', 'ss', 'sh', 'ch', 'x', 'z'
+	if strings.HasSuffix(singular, "s") ||
+		strings.HasSuffix(singular, "ss") ||
+		strings.HasSuffix(singular, "sh") ||
+		strings.HasSuffix(singular, "ch") ||
+		strings.HasSuffix(singular, "x") ||
+		strings.HasSuffix(singular, "z") {
+		return singular + "es"
+	}
+
+	// Default: just add 's'
+	return singular + "s"
+}
+
+// isVowel returns true if the character is a vowel
+func isVowel(c byte) bool {
+	return c == 'a' || c == 'e' || c == 'i' || c == 'o' || c == 'u'
 }
