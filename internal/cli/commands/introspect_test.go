@@ -558,11 +558,23 @@ func TestIntrospectRoutesCommand(t *testing.T) {
 		assert.Equal(t, "", flag.DefValue)
 	})
 
-	t.Run("returns not implemented error", func(t *testing.T) {
+	t.Run("has resource flag", func(t *testing.T) {
 		cmd := newIntrospectRoutesCommand()
+		flag := cmd.Flags().Lookup("resource")
+		require.NotNil(t, flag)
+		assert.Equal(t, "", flag.DefValue)
+	})
+
+	t.Run("returns error when registry not initialized", func(t *testing.T) {
+		metadata.Reset()
+
+		cmd := newIntrospectRoutesCommand()
+		buf := &bytes.Buffer{}
+		cmd.SetOut(buf)
+
 		err := cmd.RunE(cmd, []string{})
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "not yet implemented")
+		assert.Contains(t, err.Error(), "registry not initialized")
 	})
 }
 

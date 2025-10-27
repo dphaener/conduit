@@ -141,16 +141,18 @@ Shows the HTTP method, path, handler, and middleware for each route.`,
   # Filter by middleware
   conduit introspect routes --middleware auth
 
+  # Filter by resource
+  conduit introspect routes --resource Post
+
   # Output in JSON format
   conduit introspect routes --format json`,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return fmt.Errorf("not yet implemented - requires runtime registry")
-		},
+		RunE: runIntrospectRoutesCommand,
 	}
 
 	// Add command-specific flags
 	cmd.Flags().String("method", "", "Filter by HTTP method (GET, POST, PUT, DELETE)")
 	cmd.Flags().String("middleware", "", "Filter by middleware name")
+	cmd.Flags().String("resource", "", "Filter by resource name")
 
 	return cmd
 }
@@ -1031,4 +1033,139 @@ func formatResourceAsJSON(resource *metadata.ResourceMetadata, writer io.Writer)
 	encoder := json.NewEncoder(writer)
 	encoder.SetIndent("", "  ")
 	return encoder.Encode(resource)
+}
+
+// runIntrospectRoutesCommand executes the 'introspect routes' command
+func runIntrospectRoutesCommand(cmd *cobra.Command, args []string) error {
+	// Get all routes from the registry
+	routes := metadata.QueryRoutes()
+	if routes == nil {
+		return fmt.Errorf("registry not initialized - run 'conduit build' first to generate metadata")
+	}
+
+	// Get filter flags
+	methodFilter, _ := cmd.Flags().GetString("method")
+	middlewareFilter, _ := cmd.Flags().GetString("middleware")
+	resourceFilter, _ := cmd.Flags().GetString("resource")
+
+	// Apply filtering
+	filteredRoutes := filterRoutes(routes, methodFilter, middlewareFilter, resourceFilter)
+
+	// Sort routes alphabetically by path
+	sort.Slice(filteredRoutes, func(i, j int) bool {
+		return filteredRoutes[i].Path < filteredRoutes[j].Path
+	})
+
+	// Get the output writer
+	writer := cmd.OutOrStdout()
+
+	// Format output based on the format flag
+	if outputFormat == "json" {
+		return formatRoutesAsJSON(filteredRoutes, writer)
+	}
+
+	// Default: table format
+	return formatRoutesAsTable(filteredRoutes, writer)
+}
+
+// filterRoutes applies filtering logic to routes based on the provided filters
+func filterRoutes(routes []metadata.RouteMetadata, methodFilter, middlewareFilter, resourceFilter string) []metadata.RouteMetadata {
+	if methodFilter == "" && middlewareFilter == "" && resourceFilter == "" {
+		return routes
+	}
+
+	filtered := make([]metadata.RouteMetadata, 0, len(routes))
+	for _, route := range routes {
+		// Check method filter (case-insensitive)
+		if methodFilter != "" && !strings.EqualFold(route.Method, methodFilter) {
+			continue
+		}
+
+		// Check middleware filter (substring match)
+		if middlewareFilter != "" {
+			found := false
+			for _, mw := range route.Middleware {
+				if strings.Contains(strings.ToLower(mw), strings.ToLower(middlewareFilter)) {
+					found = true
+					break
+				}
+			}
+			if !found {
+				continue
+			}
+		}
+
+		// Check resource filter (exact match)
+		if resourceFilter != "" && route.Resource != resourceFilter {
+			continue
+		}
+
+		filtered = append(filtered, route)
+	}
+
+	return filtered
+}
+
+// formatRoutesAsTable formats routes as a human-readable table
+func formatRoutesAsTable(routes []metadata.RouteMetadata, writer io.Writer) error {
+	if len(routes) == 0 {
+		fmt.Fprintln(writer, "No routes found.")
+		return nil
+	}
+
+	// Define colors for different HTTP methods
+	getColor := color.New(color.FgGreen)
+	postColor := color.New(color.FgBlue)
+	putColor := color.New(color.FgYellow)
+	deleteColor := color.New(color.FgRed)
+	defaultColor := color.New(color.Reset)
+
+	for _, route := range routes {
+		// Colorize method based on HTTP verb
+		var methodColor *color.Color
+		switch strings.ToUpper(route.Method) {
+		case "GET":
+			methodColor = getColor
+		case "POST":
+			methodColor = postColor
+		case "PUT":
+			methodColor = putColor
+		case "DELETE":
+			methodColor = deleteColor
+		default:
+			methodColor = defaultColor
+		}
+
+		// Format: METHOD PATH -> HANDLER [MIDDLEWARE]
+		methodColor.Fprintf(writer, "%-6s", route.Method)
+		fmt.Fprintf(writer, " %-30s -> ", route.Path)
+		fmt.Fprintf(writer, "%-20s", route.Handler)
+
+		// Show middleware if present
+		if len(route.Middleware) > 0 {
+			yellow := color.New(color.FgYellow)
+			yellow.Fprintf(writer, " [%s]", strings.Join(route.Middleware, ", "))
+		}
+
+		fmt.Fprintln(writer)
+	}
+
+	return nil
+}
+
+// formatRoutesAsJSON formats routes as JSON
+func formatRoutesAsJSON(routes []metadata.RouteMetadata, writer io.Writer) error {
+	type JSONOutput struct {
+		TotalCount int                      `json:"total_count"`
+		Routes     []metadata.RouteMetadata `json:"routes"`
+	}
+
+	output := JSONOutput{
+		TotalCount: len(routes),
+		Routes:     routes,
+	}
+
+	encoder := json.NewEncoder(writer)
+	encoder.SetIndent("", "  ")
+	return encoder.Encode(output)
 }
