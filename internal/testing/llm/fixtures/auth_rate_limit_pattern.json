@@ -1,0 +1,23 @@
+{
+  "id": "auth-rate-001",
+  "name": "authenticated_rate_limited_handler",
+  "category": "authentication",
+  "description": "Handler with authentication and rate limiting middleware",
+  "template": "@on <operation>: [auth, rate_limit(10/hour)]",
+  "examples": [
+    {
+      "resource": "Post",
+      "file_path": "/app/resources/post.cdt",
+      "line_number": 30,
+      "code": "@on create: [auth, rate_limit(10/hour)]"
+    },
+    {
+      "resource": "Comment",
+      "file_path": "/app/resources/comment.cdt",
+      "line_number": 22,
+      "code": "@on create: [auth, rate_limit(10/hour)]"
+    }
+  ],
+  "frequency": 2,
+  "confidence": 0.8
+}

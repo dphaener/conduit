@@ -1,0 +1,23 @@
+{
+  "id": "rel-001",
+  "name": "belongs_to_relationship",
+  "category": "relationships",
+  "description": "Belongs-to relationship pattern",
+  "template": "<field>: <Type>! { foreign_key: \"<fk>\", on_delete: <action> }",
+  "examples": [
+    {
+      "resource": "Post",
+      "file_path": "/app/resources/post.cdt",
+      "line_number": 8,
+      "code": "author: User! { foreign_key: \"author_id\", on_delete: restrict }"
+    },
+    {
+      "resource": "Comment",
+      "file_path": "/app/resources/comment.cdt",
+      "line_number": 6,
+      "code": "post: Post! { foreign_key: \"post_id\", on_delete: cascade }"
+    }
+  ],
+  "frequency": 5,
+  "confidence": 0.93
+}

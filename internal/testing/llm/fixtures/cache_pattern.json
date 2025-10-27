@@ -1,0 +1,29 @@
+{
+  "id": "cache-001",
+  "name": "cached_handler",
+  "category": "caching",
+  "description": "Handler with cache middleware for performance optimization",
+  "template": "@on <operation>: [cache(300)]",
+  "examples": [
+    {
+      "resource": "Article",
+      "file_path": "/app/resources/article.cdt",
+      "line_number": 20,
+      "code": "@on list: [cache(300)]"
+    },
+    {
+      "resource": "Tag",
+      "file_path": "/app/resources/tag.cdt",
+      "line_number": 12,
+      "code": "@on show: [cache(300)]"
+    },
+    {
+      "resource": "Category",
+      "file_path": "/app/resources/category.cdt",
+      "line_number": 8,
+      "code": "@on list: [cache(300)]"
+    }
+  ],
+  "frequency": 4,
+  "confidence": 0.9
+}

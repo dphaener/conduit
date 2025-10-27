@@ -1,0 +1,23 @@
+{
+  "id": "hook-001",
+  "name": "before_create_hook",
+  "category": "hooks",
+  "description": "Before create lifecycle hook",
+  "template": "@before create { <code> }",
+  "examples": [
+    {
+      "resource": "Post",
+      "file_path": "/app/resources/post.cdt",
+      "line_number": 15,
+      "code": "@before create { self.slug = String.slugify(self.title) }"
+    },
+    {
+      "resource": "User",
+      "file_path": "/app/resources/user.cdt",
+      "line_number": 12,
+      "code": "@before create { self.created_at = Time.now() }"
+    }
+  ],
+  "frequency": 4,
+  "confidence": 0.88
+}
