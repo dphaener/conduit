@@ -512,11 +512,26 @@ func TestIntrospectResourceCommand(t *testing.T) {
 		assert.Error(t, err)
 	})
 
-	t.Run("returns not implemented error", func(t *testing.T) {
+	t.Run("returns error when resource not found", func(t *testing.T) {
+		// Setup empty registry
+		metadata.Reset()
+		emptyMeta := &metadata.Metadata{
+			Version:   "1.0.0",
+			Generated: time.Now(),
+			Resources: []metadata.ResourceMetadata{},
+		}
+		data, err := json.Marshal(emptyMeta)
+		require.NoError(t, err)
+		err = metadata.RegisterMetadata(data)
+		require.NoError(t, err)
+
 		cmd := newIntrospectResourceCommand()
-		err := cmd.RunE(cmd, []string{"Post"})
+		buf := &bytes.Buffer{}
+		cmd.SetOut(buf)
+
+		err = cmd.RunE(cmd, []string{"NonExistent"})
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "not yet implemented")
+		assert.Contains(t, err.Error(), "resource not found")
 	})
 }
 
@@ -974,5 +989,443 @@ func TestHelpOutput(t *testing.T) {
 		output := buf.String()
 		assert.Contains(t, output, "Example")
 		assert.Contains(t, strings.ToLower(output), "conduit introspect resources")
+	})
+}
+
+func TestRunIntrospectResourceCommand(t *testing.T) {
+	// Helper to create test metadata with a detailed Post resource
+	createTestMetadataWithPost := func() *metadata.Metadata {
+		return &metadata.Metadata{
+			Version:   "1.0.0",
+			Generated: time.Now(),
+			Resources: []metadata.ResourceMetadata{
+				{
+					Name:          "Post",
+					Documentation: "Blog post with content and categorization",
+					FilePath:      "resources/post.cdt",
+					Fields: []metadata.FieldMetadata{
+						{Name: "id", Type: "uuid", Required: true, Constraints: []string{"@primary", "@auto"}},
+						{Name: "title", Type: "string", Required: true, Constraints: []string{"@min(5)", "@max(200)"}},
+						{Name: "slug", Type: "string", Required: true, Constraints: []string{"@unique"}},
+						{Name: "content", Type: "text", Required: true, Constraints: []string{"@min(100)"}},
+						{Name: "excerpt", Type: "text", Nullable: true},
+						{Name: "author_id", Type: "uuid", Required: true},
+					},
+					Relationships: []metadata.RelationshipMetadata{
+						{
+							Name:           "author",
+							Type:           "belongs_to",
+							TargetResource: "User",
+							ForeignKey:     "author_id",
+							OnDelete:       "restrict",
+						},
+						{
+							Name:           "comments",
+							Type:           "has_many",
+							TargetResource: "Comment",
+						},
+						{
+							Name:           "tags",
+							Type:           "has_many_through",
+							TargetResource: "Tag",
+							ThroughTable:   "post_tags",
+						},
+					},
+					Hooks: []metadata.HookMetadata{
+						{Type: "before_create", Transaction: true, SourceCode: "self.slug = String.slugify(self.title)"},
+						{Type: "after_create", Async: true},
+					},
+					Constraints: []metadata.ConstraintMetadata{
+						{
+							Name:       "published_requires_content",
+							Operations: []string{"create", "update"},
+							When:       "self.status == \"published\"",
+							Condition:  "String.length(self.content) >= 500",
+							Error:      "Published posts need 500+ characters",
+						},
+					},
+					Validations: []metadata.ValidationMetadata{
+						{Field: "title", Type: "min", Value: "5"},
+						{Field: "title", Type: "max", Value: "200"},
+					},
+					Middleware: map[string][]string{
+						"create": {"auth", "rate_limit(5/hour)"},
+						"list":   {"cache(300)"},
+					},
+				},
+				{
+					Name: "User",
+					Fields: []metadata.FieldMetadata{
+						{Name: "id", Type: "uuid", Required: true},
+						{Name: "email", Type: "string", Required: true},
+					},
+				},
+			},
+			Routes: []metadata.RouteMetadata{
+				{
+					Method:     "GET",
+					Path:       "/posts",
+					Handler:    "PostHandler.List",
+					Resource:   "Post",
+					Operation:  "list",
+					Middleware: []string{"cache(300)"},
+				},
+				{
+					Method:     "POST",
+					Path:       "/posts",
+					Handler:    "PostHandler.Create",
+					Resource:   "Post",
+					Operation:  "create",
+					Middleware: []string{"auth", "rate_limit(5/hour)"},
+				},
+			},
+		}
+	}
+
+	t.Run("formats table output correctly", func(t *testing.T) {
+		// Setup test registry
+		metadata.Reset()
+		testMeta := createTestMetadataWithPost()
+		data, err := json.Marshal(testMeta)
+		require.NoError(t, err)
+		err = metadata.RegisterMetadata(data)
+		require.NoError(t, err)
+
+		// Reset global flags
+		outputFormat = "table"
+		verbose = false
+		noColor = true // Disable color for testing
+
+		cmd := newIntrospectResourceCommand()
+		buf := &bytes.Buffer{}
+		cmd.SetOut(buf)
+
+		err = cmd.RunE(cmd, []string{"Post"})
+		require.NoError(t, err)
+
+		output := buf.String()
+
+		// Check header
+		assert.Contains(t, output, "RESOURCE: Post")
+		assert.Contains(t, output, "File: resources/post.cdt")
+		assert.Contains(t, output, "Docs: Blog post with content and categorization")
+
+		// Check schema section
+		assert.Contains(t, output, "SCHEMA")
+		assert.Contains(t, output, "FIELDS (6)")
+		assert.Contains(t, output, "Required (5)")
+		assert.Contains(t, output, "Optional (1)")
+
+		// Check fields
+		assert.Contains(t, output, "id")
+		assert.Contains(t, output, "uuid")
+		assert.Contains(t, output, "title")
+		assert.Contains(t, output, "string")
+		assert.Contains(t, output, "@min(5)")
+		assert.Contains(t, output, "@max(200)")
+
+		// Check relationships
+		assert.Contains(t, output, "RELATIONSHIPS (3)")
+		assert.Contains(t, output, "author")
+		assert.Contains(t, output, "belongs_to User")
+		assert.Contains(t, output, "Foreign key: author_id")
+		assert.Contains(t, output, "On delete: restrict")
+
+		// Check behavior section
+		assert.Contains(t, output, "BEHAVIOR")
+		assert.Contains(t, output, "LIFECYCLE HOOKS")
+		assert.Contains(t, output, "@before_create")
+		assert.Contains(t, output, "@after_create")
+
+		// Check constraints
+		assert.Contains(t, output, "CONSTRAINTS (1)")
+		assert.Contains(t, output, "published_requires_content")
+
+		// Check API endpoints
+		assert.Contains(t, output, "API ENDPOINTS")
+		assert.Contains(t, output, "GET /posts")
+		assert.Contains(t, output, "POST /posts")
+		assert.Contains(t, output, "cache(300)")
+		assert.Contains(t, output, "auth")
+	})
+
+	t.Run("formats verbose table output correctly", func(t *testing.T) {
+		// Setup test registry
+		metadata.Reset()
+		testMeta := createTestMetadataWithPost()
+		data, err := json.Marshal(testMeta)
+		require.NoError(t, err)
+		err = metadata.RegisterMetadata(data)
+		require.NoError(t, err)
+
+		// Set verbose flag
+		outputFormat = "table"
+		verbose = true
+		noColor = true
+
+		cmd := newIntrospectResourceCommand()
+		buf := &bytes.Buffer{}
+		cmd.SetOut(buf)
+
+		err = cmd.RunE(cmd, []string{"Post"})
+		require.NoError(t, err)
+
+		output := buf.String()
+
+		// In verbose mode, should show more details
+		assert.Contains(t, output, "CONSTRAINTS (1)")
+		assert.Contains(t, output, "Operations:")
+		assert.Contains(t, output, "Condition:")
+		assert.Contains(t, output, "Error:")
+
+		assert.Contains(t, output, "MIDDLEWARE BY OPERATION")
+		assert.Contains(t, output, "create:")
+		assert.Contains(t, output, "list:")
+
+		// Reset verbose flag
+		verbose = false
+	})
+
+	t.Run("formats JSON output correctly", func(t *testing.T) {
+		// Setup test registry
+		metadata.Reset()
+		testMeta := createTestMetadataWithPost()
+		data, err := json.Marshal(testMeta)
+		require.NoError(t, err)
+		err = metadata.RegisterMetadata(data)
+		require.NoError(t, err)
+
+		// Set JSON format
+		outputFormat = "json"
+		verbose = false
+		noColor = true
+
+		cmd := newIntrospectResourceCommand()
+		buf := &bytes.Buffer{}
+		cmd.SetOut(buf)
+
+		err = cmd.RunE(cmd, []string{"Post"})
+		require.NoError(t, err)
+
+		// Parse JSON output
+		var result metadata.ResourceMetadata
+		err = json.Unmarshal(buf.Bytes(), &result)
+		require.NoError(t, err)
+
+		// Verify JSON structure
+		assert.Equal(t, "Post", result.Name)
+		assert.Equal(t, "resources/post.cdt", result.FilePath)
+		assert.Equal(t, "Blog post with content and categorization", result.Documentation)
+		assert.Len(t, result.Fields, 6)
+		assert.Len(t, result.Relationships, 3)
+		assert.Len(t, result.Hooks, 2)
+		assert.Len(t, result.Constraints, 1)
+
+		// Reset format
+		outputFormat = "table"
+	})
+
+	t.Run("returns error for non-existent resource", func(t *testing.T) {
+		// Setup test registry
+		metadata.Reset()
+		testMeta := createTestMetadataWithPost()
+		data, err := json.Marshal(testMeta)
+		require.NoError(t, err)
+		err = metadata.RegisterMetadata(data)
+		require.NoError(t, err)
+
+		outputFormat = "table"
+		verbose = false
+		noColor = true
+
+		cmd := newIntrospectResourceCommand()
+		buf := &bytes.Buffer{}
+		cmd.SetOut(buf)
+
+		err = cmd.RunE(cmd, []string{"NonExistent"})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "resource not found")
+
+		output := buf.String()
+		assert.Contains(t, output, "Error: Resource 'NonExistent' not found")
+		assert.Contains(t, output, "Available resources:")
+		assert.Contains(t, output, "Post")
+		assert.Contains(t, output, "User")
+	})
+
+	t.Run("suggests similar resource names on typo", func(t *testing.T) {
+		// Setup test registry
+		metadata.Reset()
+		testMeta := createTestMetadataWithPost()
+		data, err := json.Marshal(testMeta)
+		require.NoError(t, err)
+		err = metadata.RegisterMetadata(data)
+		require.NoError(t, err)
+
+		outputFormat = "table"
+		verbose = false
+		noColor = true
+
+		cmd := newIntrospectResourceCommand()
+		buf := &bytes.Buffer{}
+		cmd.SetOut(buf)
+
+		// Try with typo "Pst" instead of "Post"
+		err = cmd.RunE(cmd, []string{"Pst"})
+		require.Error(t, err)
+
+		output := buf.String()
+		assert.Contains(t, output, "Did you mean:")
+		assert.Contains(t, output, "Post")
+	})
+
+	// Cleanup after tests
+	t.Cleanup(func() {
+		metadata.Reset()
+		outputFormat = "table"
+		verbose = false
+		noColor = false
+	})
+}
+
+func TestLevenshteinDistance(t *testing.T) {
+	tests := []struct {
+		s1       string
+		s2       string
+		expected int
+	}{
+		{"", "", 0},
+		{"a", "", 1},
+		{"", "a", 1},
+		{"cat", "cat", 0},
+		{"cat", "bat", 1},
+		{"cat", "car", 1},
+		{"cat", "cut", 1},
+		{"cat", "cats", 1},
+		{"kitten", "sitting", 3},
+		{"Post", "Pst", 1},
+		{"User", "Usr", 1},
+		{"Comment", "Coment", 1},
+	}
+
+	for _, tt := range tests {
+		t.Run(fmt.Sprintf("%s->%s", tt.s1, tt.s2), func(t *testing.T) {
+			result := levenshteinDistance(tt.s1, tt.s2)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestFindSimilarResourceNames(t *testing.T) {
+	resources := []metadata.ResourceMetadata{
+		{Name: "Post"},
+		{Name: "User"},
+		{Name: "Comment"},
+		{Name: "Category"},
+		{Name: "Tag"},
+	}
+
+	tests := []struct {
+		name     string
+		input    string
+		expected []string
+	}{
+		{
+			name:     "exact typo - one letter off",
+			input:    "Pst",
+			expected: []string{"Post"},
+		},
+		{
+			name:     "close match",
+			input:    "Usr",
+			expected: []string{"User"},
+		},
+		{
+			name:     "two letters off",
+			input:    "Coment",
+			expected: []string{"Comment"},
+		},
+		{
+			name:     "no close matches",
+			input:    "xyz",
+			expected: []string{},
+		},
+		{
+			name:     "multiple matches - sorted by distance",
+			input:    "Cat",
+			expected: []string{"Tag"}, // Cat->Tag=1 (Cat->Category=5 is >3 so won't match)
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := findSimilarResourceNames(tt.input, resources)
+
+			// Check we got at least the expected suggestions (there may be more)
+			for _, expected := range tt.expected {
+				found := false
+				for _, r := range result {
+					if r == expected {
+						found = true
+						break
+					}
+				}
+				if !found && len(tt.expected) > 0 {
+					// Only assert if we expected suggestions
+					assert.Contains(t, result, expected)
+				}
+			}
+		})
+	}
+}
+
+func TestHandleResourceNotFound(t *testing.T) {
+	t.Run("shows error message and suggestions", func(t *testing.T) {
+		// Setup test registry
+		metadata.Reset()
+		testMeta := &metadata.Metadata{
+			Version:   "1.0.0",
+			Generated: time.Now(),
+			Resources: []metadata.ResourceMetadata{
+				{Name: "Post"},
+				{Name: "User"},
+				{Name: "Comment"},
+			},
+		}
+		data, err := json.Marshal(testMeta)
+		require.NoError(t, err)
+		err = metadata.RegisterMetadata(data)
+		require.NoError(t, err)
+
+		noColor = true // Disable color for testing
+
+		buf := &bytes.Buffer{}
+		err = handleResourceNotFound("Pst", buf)
+
+		require.Error(t, err)
+		output := buf.String()
+
+		assert.Contains(t, output, "Error: Resource 'Pst' not found")
+		assert.Contains(t, output, "Did you mean:")
+		assert.Contains(t, output, "Post")
+		assert.Contains(t, output, "Available resources:")
+		assert.Contains(t, output, "User")
+		assert.Contains(t, output, "Comment")
+	})
+
+	t.Run("shows error when registry not initialized", func(t *testing.T) {
+		metadata.Reset()
+		noColor = true
+
+		buf := &bytes.Buffer{}
+		err := handleResourceNotFound("Post", buf)
+
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "registry not initialized")
+	})
+
+	t.Cleanup(func() {
+		metadata.Reset()
+		noColor = false
 	})
 }

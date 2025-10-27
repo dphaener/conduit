@@ -120,9 +120,7 @@ associated with the resource.`,
   # View details in JSON format
   conduit introspect resource Post --format json`,
 		Args: cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return fmt.Errorf("not yet implemented - requires runtime registry")
-		},
+		RunE: runIntrospectResourceCommand,
 	}
 }
 
@@ -630,5 +628,385 @@ func formatResourcesAsJSON(resources []metadata.ResourceMetadata, writer io.Writ
 	encoder := json.NewEncoder(writer)
 	encoder.SetIndent("", "  ")
 	return encoder.Encode(output)
+}
+
+// runIntrospectResourceCommand executes the 'introspect resource <name>' command
+func runIntrospectResourceCommand(cmd *cobra.Command, args []string) error {
+	resourceName := args[0]
+
+	// Get resource from the registry
+	resource, err := metadata.QueryResource(resourceName)
+	if err != nil {
+		// Try to suggest similar resource names
+		return handleResourceNotFound(resourceName, cmd.OutOrStdout())
+	}
+
+	// Get the output writer
+	writer := cmd.OutOrStdout()
+
+	// Format output based on the format flag
+	if outputFormat == "json" {
+		return formatResourceAsJSON(resource, writer)
+	}
+
+	// Default: table format
+	return formatResourceAsTable(resource, writer, verbose)
+}
+
+// handleResourceNotFound handles the case when a resource is not found
+// and suggests similar resource names using fuzzy search
+func handleResourceNotFound(name string, writer io.Writer) error {
+	// Get all resources for fuzzy matching
+	resources := metadata.QueryResources()
+	if resources == nil {
+		return fmt.Errorf("registry not initialized - run 'conduit build' first to generate metadata")
+	}
+
+	// Find similar resource names
+	suggestions := findSimilarResourceNames(name, resources)
+
+	red := color.New(color.FgRed, color.Bold)
+	yellow := color.New(color.FgYellow)
+
+	red.Fprintf(writer, "Error: Resource '%s' not found\n\n", name)
+
+	if len(suggestions) > 0 {
+		yellow.Fprintln(writer, "Did you mean:")
+		for _, suggestion := range suggestions {
+			fmt.Fprintf(writer, "  - %s\n", suggestion)
+		}
+		fmt.Fprintln(writer)
+	}
+
+	fmt.Fprintln(writer, "Available resources:")
+	for _, res := range resources {
+		fmt.Fprintf(writer, "  - %s\n", res.Name)
+	}
+
+	return fmt.Errorf("resource not found: %s", name)
+}
+
+// findSimilarResourceNames finds resource names similar to the given name
+// using Levenshtein distance algorithm
+func findSimilarResourceNames(name string, resources []metadata.ResourceMetadata) []string {
+	const maxDistance = 3 // Maximum edit distance to consider
+	const maxSuggestions = 3
+
+	type suggestion struct {
+		name     string
+		distance int
+	}
+
+	var suggestions []suggestion
+
+	for _, res := range resources {
+		dist := levenshteinDistance(strings.ToLower(name), strings.ToLower(res.Name))
+		if dist <= maxDistance {
+			suggestions = append(suggestions, suggestion{
+				name:     res.Name,
+				distance: dist,
+			})
+		}
+	}
+
+	// Sort by distance (closest first)
+	sort.Slice(suggestions, func(i, j int) bool {
+		return suggestions[i].distance < suggestions[j].distance
+	})
+
+	// Return top suggestions
+	result := make([]string, 0, maxSuggestions)
+	for i := 0; i < len(suggestions) && i < maxSuggestions; i++ {
+		result = append(result, suggestions[i].name)
+	}
+
+	return result
+}
+
+// levenshteinDistance calculates the Levenshtein distance between two strings
+func levenshteinDistance(s1, s2 string) int {
+	if len(s1) == 0 {
+		return len(s2)
+	}
+	if len(s2) == 0 {
+		return len(s1)
+	}
+
+	// Create matrix
+	matrix := make([][]int, len(s1)+1)
+	for i := range matrix {
+		matrix[i] = make([]int, len(s2)+1)
+	}
+
+	// Initialize first column and row
+	for i := 0; i <= len(s1); i++ {
+		matrix[i][0] = i
+	}
+	for j := 0; j <= len(s2); j++ {
+		matrix[0][j] = j
+	}
+
+	// Fill matrix
+	for i := 1; i <= len(s1); i++ {
+		for j := 1; j <= len(s2); j++ {
+			cost := 1
+			if s1[i-1] == s2[j-1] {
+				cost = 0
+			}
+
+			matrix[i][j] = min(
+				matrix[i-1][j]+1,      // deletion
+				matrix[i][j-1]+1,      // insertion
+				matrix[i-1][j-1]+cost, // substitution
+			)
+		}
+	}
+
+	return matrix[len(s1)][len(s2)]
+}
+
+// min returns the minimum of three integers
+func min(a, b, c int) int {
+	if a < b {
+		if a < c {
+			return a
+		}
+		return c
+	}
+	if b < c {
+		return b
+	}
+	return c
+}
+
+// formatResourceAsTable formats a single resource as a human-readable table
+func formatResourceAsTable(resource *metadata.ResourceMetadata, writer io.Writer, verbose bool) error {
+	bold := color.New(color.Bold)
+	cyan := color.New(color.FgCyan)
+	green := color.New(color.FgGreen)
+	yellow := color.New(color.FgYellow)
+
+	// Header section
+	bold.Fprintf(writer, "RESOURCE: %s\n", resource.Name)
+	if resource.FilePath != "" {
+		fmt.Fprintf(writer, "File: %s\n", resource.FilePath)
+	}
+	if resource.Documentation != "" {
+		fmt.Fprintf(writer, "Docs: %s\n", resource.Documentation)
+	}
+	fmt.Fprintln(writer)
+
+	// Schema section
+	cyan.Fprintln(writer, "━━━ SCHEMA ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+	fmt.Fprintln(writer)
+
+	// Fields
+	bold.Fprintf(writer, "FIELDS (%d):\n", len(resource.Fields))
+
+	// Group fields by required/optional
+	requiredFields := []metadata.FieldMetadata{}
+	optionalFields := []metadata.FieldMetadata{}
+
+	for _, field := range resource.Fields {
+		if field.Required {
+			requiredFields = append(requiredFields, field)
+		} else {
+			optionalFields = append(optionalFields, field)
+		}
+	}
+
+	if len(requiredFields) > 0 {
+		fmt.Fprintf(writer, "Required (%d):\n", len(requiredFields))
+		for _, field := range requiredFields {
+			fmt.Fprintf(writer, "  %s  %s", field.Name, field.Type)
+			if len(field.Constraints) > 0 {
+				fmt.Fprintf(writer, "  %s", strings.Join(field.Constraints, " "))
+			}
+			if field.DefaultValue != "" {
+				fmt.Fprintf(writer, "  (default: %s)", field.DefaultValue)
+			}
+			fmt.Fprintln(writer)
+			if verbose && field.Documentation != "" {
+				fmt.Fprintf(writer, "    %s\n", field.Documentation)
+			}
+		}
+		fmt.Fprintln(writer)
+	}
+
+	if len(optionalFields) > 0 {
+		fmt.Fprintf(writer, "Optional (%d):\n", len(optionalFields))
+		for _, field := range optionalFields {
+			fmt.Fprintf(writer, "  %s  %s", field.Name, field.Type)
+			if len(field.Constraints) > 0 {
+				fmt.Fprintf(writer, "  %s", strings.Join(field.Constraints, " "))
+			}
+			if field.DefaultValue != "" {
+				fmt.Fprintf(writer, "  (default: %s)", field.DefaultValue)
+			}
+			fmt.Fprintln(writer)
+			if verbose && field.Documentation != "" {
+				fmt.Fprintf(writer, "    %s\n", field.Documentation)
+			}
+		}
+		fmt.Fprintln(writer)
+	}
+
+	// Relationships
+	if len(resource.Relationships) > 0 {
+		bold.Fprintf(writer, "RELATIONSHIPS (%d):\n", len(resource.Relationships))
+		for _, rel := range resource.Relationships {
+			fmt.Fprintf(writer, "  → %s (%s %s)\n", rel.Name, rel.Type, rel.TargetResource)
+			if rel.ForeignKey != "" {
+				fmt.Fprintf(writer, "    Foreign key: %s\n", rel.ForeignKey)
+			}
+			if rel.ThroughTable != "" {
+				fmt.Fprintf(writer, "    Through: %s\n", rel.ThroughTable)
+			}
+			if rel.OnDelete != "" {
+				fmt.Fprintf(writer, "    On delete: %s\n", rel.OnDelete)
+			}
+			if rel.OnUpdate != "" {
+				fmt.Fprintf(writer, "    On update: %s\n", rel.OnUpdate)
+			}
+		}
+		fmt.Fprintln(writer)
+	}
+
+	// Behavior section
+	if len(resource.Hooks) > 0 || len(resource.Constraints) > 0 || len(resource.Validations) > 0 {
+		cyan.Fprintln(writer, "━━━ BEHAVIOR ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+		fmt.Fprintln(writer)
+
+		// Lifecycle Hooks
+		if len(resource.Hooks) > 0 {
+			bold.Fprintln(writer, "LIFECYCLE HOOKS:")
+
+			// Group hooks by type
+			hooksByType := make(map[string][]metadata.HookMetadata)
+			for _, hook := range resource.Hooks {
+				hooksByType[hook.Type] = append(hooksByType[hook.Type], hook)
+			}
+
+			// Sort hook types for consistent output
+			hookTypes := make([]string, 0, len(hooksByType))
+			for hookType := range hooksByType {
+				hookTypes = append(hookTypes, hookType)
+			}
+			sort.Strings(hookTypes)
+
+			for _, hookType := range hookTypes {
+				hooks := hooksByType[hookType]
+				fmt.Fprintf(writer, "  @%s", hookType)
+
+				// Show flags
+				flags := []string{}
+				if hooks[0].Transaction {
+					flags = append(flags, "transaction")
+				}
+				if hooks[0].Async {
+					flags = append(flags, "async")
+				}
+				if len(flags) > 0 {
+					fmt.Fprintf(writer, " [%s]", strings.Join(flags, ", "))
+				}
+				fmt.Fprintln(writer, ":")
+
+				if verbose && hooks[0].SourceCode != "" {
+					// Show source code in verbose mode
+					lines := strings.Split(hooks[0].SourceCode, "\n")
+					for _, line := range lines {
+						fmt.Fprintf(writer, "    %s\n", line)
+					}
+				}
+			}
+			fmt.Fprintln(writer)
+		}
+
+		// Constraints
+		if len(resource.Constraints) > 0 {
+			bold.Fprintf(writer, "CONSTRAINTS (%d):\n", len(resource.Constraints))
+			for _, constraint := range resource.Constraints {
+				green.Fprintf(writer, "  ✓ %s\n", constraint.Name)
+				if verbose {
+					fmt.Fprintf(writer, "    Operations: %s\n", strings.Join(constraint.Operations, ", "))
+					if constraint.When != "" {
+						fmt.Fprintf(writer, "    When: %s\n", constraint.When)
+					}
+					fmt.Fprintf(writer, "    Condition: %s\n", constraint.Condition)
+					fmt.Fprintf(writer, "    Error: %s\n", constraint.Error)
+				}
+			}
+			fmt.Fprintln(writer)
+		}
+
+		// Validations
+		if len(resource.Validations) > 0 && verbose {
+			bold.Fprintf(writer, "VALIDATIONS (%d):\n", len(resource.Validations))
+			for _, validation := range resource.Validations {
+				fmt.Fprintf(writer, "  %s: %s", validation.Field, validation.Type)
+				if validation.Value != "" {
+					fmt.Fprintf(writer, "(%s)", validation.Value)
+				}
+				if validation.Message != "" {
+					fmt.Fprintf(writer, " - %s", validation.Message)
+				}
+				fmt.Fprintln(writer)
+			}
+			fmt.Fprintln(writer)
+		}
+	}
+
+	// API Endpoints section
+	cyan.Fprintln(writer, "━━━ API ENDPOINTS ━━━━━━━━━━━━━━━━━━━━━━━━━")
+	fmt.Fprintln(writer)
+
+	// Get all routes and filter by this resource
+	allRoutes := metadata.QueryRoutes()
+	resourceRoutes := []metadata.RouteMetadata{}
+	for _, route := range allRoutes {
+		if route.Resource == resource.Name {
+			resourceRoutes = append(resourceRoutes, route)
+		}
+	}
+
+	if len(resourceRoutes) > 0 {
+		for _, route := range resourceRoutes {
+			fmt.Fprintf(writer, "%s %s → %s", route.Method, route.Path, route.Operation)
+			if len(route.Middleware) > 0 {
+				yellow.Fprintf(writer, " [%s]", strings.Join(route.Middleware, ", "))
+			}
+			fmt.Fprintln(writer)
+		}
+	} else {
+		fmt.Fprintln(writer, "No auto-generated routes for this resource.")
+	}
+
+	// Show middleware summary
+	if len(resource.Middleware) > 0 && verbose {
+		fmt.Fprintln(writer)
+		bold.Fprintln(writer, "MIDDLEWARE BY OPERATION:")
+
+		// Sort operations for consistent output
+		operations := make([]string, 0, len(resource.Middleware))
+		for op := range resource.Middleware {
+			operations = append(operations, op)
+		}
+		sort.Strings(operations)
+
+		for _, op := range operations {
+			middlewares := resource.Middleware[op]
+			fmt.Fprintf(writer, "  %s: %s\n", op, strings.Join(middlewares, ", "))
+		}
+	}
+
+	fmt.Fprintln(writer)
+	return nil
+}
+
+// formatResourceAsJSON formats a single resource as JSON
+func formatResourceAsJSON(resource *metadata.ResourceMetadata, writer io.Writer) error {
+	encoder := json.NewEncoder(writer)
+	encoder.SetIndent("", "  ")
+	return encoder.Encode(resource)
 }
 
