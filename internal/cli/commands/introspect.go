@@ -346,13 +346,13 @@ type ResourceCategory struct {
 
 // ResourceSummary contains summary information about a resource
 type ResourceSummary struct {
-	Name            string
-	FieldCount      int
+	Name              string
+	FieldCount        int
 	RelationshipCount int
-	HookCount       int
-	AuthRequired    bool
-	Cached          bool
-	Nested          bool
+	HookCount         int
+	AuthRequired      bool
+	Cached            bool
+	Nested            bool
 }
 
 // categorizeResources groups resources into categories
@@ -569,15 +569,15 @@ func formatResourcesAsTable(resources []metadata.ResourceMetadata, writer io.Wri
 func formatResourcesAsJSON(resources []metadata.ResourceMetadata, writer io.Writer) error {
 	// Create summary data for JSON output
 	type JSONResourceSummary struct {
-		Name              string   `json:"name"`
-		FieldCount        int      `json:"field_count"`
-		RelationshipCount int      `json:"relationship_count"`
-		HookCount         int      `json:"hook_count"`
-		ValidationCount   int      `json:"validation_count"`
-		ConstraintCount   int      `json:"constraint_count"`
+		Name              string              `json:"name"`
+		FieldCount        int                 `json:"field_count"`
+		RelationshipCount int                 `json:"relationship_count"`
+		HookCount         int                 `json:"hook_count"`
+		ValidationCount   int                 `json:"validation_count"`
+		ConstraintCount   int                 `json:"constraint_count"`
 		Middleware        map[string][]string `json:"middleware,omitempty"`
-		Category          string   `json:"category"`
-		Flags             []string `json:"flags,omitempty"`
+		Category          string              `json:"category"`
+		Flags             []string            `json:"flags,omitempty"`
 	}
 
 	type JSONOutput struct {
@@ -896,26 +896,49 @@ func formatResourceAsTable(resource *metadata.ResourceMetadata, writer io.Writer
 
 			for _, hookType := range hookTypes {
 				hooks := hooksByType[hookType]
+				if len(hooks) == 0 {
+					continue
+				}
+
 				fmt.Fprintf(writer, "  @%s", hookType)
 
-				// Show flags
-				flags := []string{}
-				if hooks[0].Transaction {
-					flags = append(flags, "transaction")
+				// Gather flags from all hooks of this type
+				flags := make(map[string]bool)
+				for _, hook := range hooks {
+					if hook.Transaction {
+						flags["transaction"] = true
+					}
+					if hook.Async {
+						flags["async"] = true
+					}
 				}
-				if hooks[0].Async {
-					flags = append(flags, "async")
-				}
+
 				if len(flags) > 0 {
-					fmt.Fprintf(writer, " [%s]", strings.Join(flags, ", "))
+					flagList := make([]string, 0, len(flags))
+					for flag := range flags {
+						flagList = append(flagList, flag)
+					}
+					sort.Strings(flagList) // For consistent output
+					fmt.Fprintf(writer, " [%s]", strings.Join(flagList, ", "))
 				}
 				fmt.Fprintln(writer, ":")
 
-				if verbose && hooks[0].SourceCode != "" {
-					// Show source code in verbose mode
-					lines := strings.Split(hooks[0].SourceCode, "\n")
-					for _, line := range lines {
-						fmt.Fprintf(writer, "    %s\n", line)
+				// Show source code for all hooks in verbose mode
+				if verbose {
+					for idx, hook := range hooks {
+						if hook.SourceCode != "" {
+							if len(hooks) > 1 {
+								fmt.Fprintf(writer, "    Hook %d:\n", idx+1)
+							}
+							lines := strings.Split(hook.SourceCode, "\n")
+							for _, line := range lines {
+								if len(hooks) > 1 {
+									fmt.Fprintf(writer, "      %s\n", line)
+								} else {
+									fmt.Fprintf(writer, "    %s\n", line)
+								}
+							}
+						}
 					}
 				}
 			}
@@ -1009,4 +1032,3 @@ func formatResourceAsJSON(resource *metadata.ResourceMetadata, writer io.Writer)
 	encoder.SetIndent("", "  ")
 	return encoder.Encode(resource)
 }
-

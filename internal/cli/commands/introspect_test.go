@@ -218,9 +218,9 @@ func TestRunIntrospectResourcesCommand(t *testing.T) {
 		assert.Contains(t, output, "Tag")
 
 		// Check counts
-		assert.Contains(t, output, "4 fields")  // User has 4 fields
-		assert.Contains(t, output, "2 relationships")  // User has 2 relationships
-		assert.Contains(t, output, "1 hook")  // User has 1 hook
+		assert.Contains(t, output, "4 fields")        // User has 4 fields
+		assert.Contains(t, output, "2 relationships") // User has 2 relationships
+		assert.Contains(t, output, "1 hook")          // User has 1 hook
 
 		// Check flags
 		assert.Contains(t, output, "auth required")
@@ -692,8 +692,8 @@ func TestTableFormatter(t *testing.T) {
 		formatter := NewTableFormatter(buf)
 
 		data := map[string]interface{}{
-			"zebra": "z",
-			"apple": "a",
+			"zebra":  "z",
+			"apple":  "a",
 			"banana": "b",
 		}
 		err := formatter.Format(data)
@@ -827,7 +827,6 @@ func TestGetFormatter(t *testing.T) {
 		assert.IsType(t, &JSONFormatter{}, formatter)
 	})
 }
-
 
 func TestFlagParsing(t *testing.T) {
 	t.Run("parses format flag", func(t *testing.T) {
@@ -1426,6 +1425,133 @@ func TestHandleResourceNotFound(t *testing.T) {
 
 	t.Cleanup(func() {
 		metadata.Reset()
+		noColor = false
+	})
+}
+
+func TestMultipleHooksOfSameType(t *testing.T) {
+	// Test the fix for Issue #1 and #2: handling multiple hooks of the same type
+	createTestMetadataWithMultipleHooks := func() *metadata.Metadata {
+		return &metadata.Metadata{
+			Version:   "1.0.0",
+			Generated: time.Now(),
+			Resources: []metadata.ResourceMetadata{
+				{
+					Name: "TestResource",
+					Fields: []metadata.FieldMetadata{
+						{Name: "id", Type: "uuid", Required: true},
+					},
+					Hooks: []metadata.HookMetadata{
+						{Type: "before_create", Transaction: true, SourceCode: "// Hook 1: Validate data\nself.validate()"},
+						{Type: "before_create", Transaction: false, SourceCode: "// Hook 2: Set defaults\nself.setDefaults()"},
+						{Type: "before_create", Async: true, SourceCode: "// Hook 3: Log creation\nLog.info('Creating resource')"},
+					},
+				},
+			},
+		}
+	}
+
+	t.Run("displays all hooks of same type with aggregated flags", func(t *testing.T) {
+		metadata.Reset()
+		testMeta := createTestMetadataWithMultipleHooks()
+		data, err := json.Marshal(testMeta)
+		require.NoError(t, err)
+		err = metadata.RegisterMetadata(data)
+		require.NoError(t, err)
+
+		outputFormat = "table"
+		verbose = false
+		noColor = true
+
+		cmd := newIntrospectResourceCommand()
+		buf := &bytes.Buffer{}
+		cmd.SetOut(buf)
+
+		err = cmd.RunE(cmd, []string{"TestResource"})
+		require.NoError(t, err)
+
+		output := buf.String()
+
+		// Should show hook type with aggregated flags
+		assert.Contains(t, output, "@before_create")
+		assert.Contains(t, output, "[async, transaction]") // Both flags should appear, sorted
+	})
+
+	t.Run("displays all hook source code in verbose mode", func(t *testing.T) {
+		metadata.Reset()
+		testMeta := createTestMetadataWithMultipleHooks()
+		data, err := json.Marshal(testMeta)
+		require.NoError(t, err)
+		err = metadata.RegisterMetadata(data)
+		require.NoError(t, err)
+
+		outputFormat = "table"
+		verbose = true
+		noColor = true
+
+		cmd := newIntrospectResourceCommand()
+		buf := &bytes.Buffer{}
+		cmd.SetOut(buf)
+
+		err = cmd.RunE(cmd, []string{"TestResource"})
+		require.NoError(t, err)
+
+		output := buf.String()
+
+		// All three hooks' source code should be displayed
+		assert.Contains(t, output, "Hook 1:")
+		assert.Contains(t, output, "Hook 2:")
+		assert.Contains(t, output, "Hook 3:")
+		assert.Contains(t, output, "// Hook 1: Validate data")
+		assert.Contains(t, output, "// Hook 2: Set defaults")
+		assert.Contains(t, output, "// Hook 3: Log creation")
+	})
+
+	t.Run("handles single hook without numbering", func(t *testing.T) {
+		metadata.Reset()
+		singleHookMeta := &metadata.Metadata{
+			Version:   "1.0.0",
+			Generated: time.Now(),
+			Resources: []metadata.ResourceMetadata{
+				{
+					Name: "SingleHookResource",
+					Fields: []metadata.FieldMetadata{
+						{Name: "id", Type: "uuid", Required: true},
+					},
+					Hooks: []metadata.HookMetadata{
+						{Type: "before_create", Transaction: true, SourceCode: "self.validate()"},
+					},
+				},
+			},
+		}
+		data, err := json.Marshal(singleHookMeta)
+		require.NoError(t, err)
+		err = metadata.RegisterMetadata(data)
+		require.NoError(t, err)
+
+		outputFormat = "table"
+		verbose = true
+		noColor = true
+
+		cmd := newIntrospectResourceCommand()
+		buf := &bytes.Buffer{}
+		cmd.SetOut(buf)
+
+		err = cmd.RunE(cmd, []string{"SingleHookResource"})
+		require.NoError(t, err)
+
+		output := buf.String()
+
+		// Should NOT show "Hook 1:" prefix for single hook
+		assert.NotContains(t, output, "Hook 1:")
+		// But should still show the source code
+		assert.Contains(t, output, "self.validate()")
+	})
+
+	t.Cleanup(func() {
+		metadata.Reset()
+		outputFormat = "table"
+		verbose = false
 		noColor = false
 	})
 }
