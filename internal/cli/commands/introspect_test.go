@@ -3,11 +3,15 @@ package commands
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/conduit-lang/conduit/runtime/metadata"
 )
 
 func TestIntrospectCommand(t *testing.T) {
@@ -72,11 +76,414 @@ func TestIntrospectResourcesCommand(t *testing.T) {
 		}
 	})
 
-	t.Run("returns not implemented error", func(t *testing.T) {
+	t.Run("returns error when registry not initialized", func(t *testing.T) {
+		// This will be tested in integration tests below
+	})
+}
+
+func TestRunIntrospectResourcesCommand(t *testing.T) {
+	// Helper to create test metadata
+	createTestMetadata := func() *metadata.Metadata {
+		return &metadata.Metadata{
+			Version:   "1.0.0",
+			Generated: time.Now(),
+			Resources: []metadata.ResourceMetadata{
+				{
+					Name: "User",
+					Fields: []metadata.FieldMetadata{
+						{Name: "id", Type: "uuid", Required: true},
+						{Name: "email", Type: "string", Required: true},
+						{Name: "name", Type: "string", Required: true},
+						{Name: "bio", Type: "text", Nullable: true},
+					},
+					Relationships: []metadata.RelationshipMetadata{
+						{Name: "posts", Type: "has_many", TargetResource: "Post"},
+						{Name: "comments", Type: "has_many", TargetResource: "Comment"},
+					},
+					Hooks: []metadata.HookMetadata{
+						{Type: "before_create", Transaction: true},
+					},
+					Middleware: map[string][]string{
+						"create": {"auth", "validate"},
+						"update": {"auth", "validate"},
+					},
+				},
+				{
+					Name: "Post",
+					Fields: []metadata.FieldMetadata{
+						{Name: "id", Type: "uuid", Required: true},
+						{Name: "title", Type: "string", Required: true},
+						{Name: "slug", Type: "string", Required: true},
+						{Name: "content", Type: "text", Required: true},
+						{Name: "author_id", Type: "uuid", Required: true},
+					},
+					Relationships: []metadata.RelationshipMetadata{
+						{Name: "author", Type: "belongs_to", TargetResource: "User"},
+						{Name: "comments", Type: "has_many", TargetResource: "Comment"},
+						{Name: "tags", Type: "has_many_through", TargetResource: "Tag"},
+					},
+					Hooks: []metadata.HookMetadata{
+						{Type: "before_create", Transaction: true},
+						{Type: "after_create", Async: true},
+					},
+					Middleware: map[string][]string{
+						"list": {"cache"},
+					},
+				},
+				{
+					Name: "Comment",
+					Fields: []metadata.FieldMetadata{
+						{Name: "id", Type: "uuid", Required: true},
+						{Name: "content", Type: "text", Required: true},
+						{Name: "author_id", Type: "uuid", Required: true},
+						{Name: "post_id", Type: "uuid", Required: true},
+					},
+					Relationships: []metadata.RelationshipMetadata{
+						{Name: "author", Type: "belongs_to", TargetResource: "User"},
+						{Name: "post", Type: "belongs_to", TargetResource: "Post"},
+					},
+					Hooks: []metadata.HookMetadata{
+						{Type: "after_create", Async: true},
+					},
+				},
+				{
+					Name: "Category",
+					Fields: []metadata.FieldMetadata{
+						{Name: "id", Type: "uuid", Required: true},
+						{Name: "name", Type: "string", Required: true},
+					},
+					Relationships: []metadata.RelationshipMetadata{
+						{Name: "posts", Type: "has_many", TargetResource: "Post"},
+					},
+				},
+				{
+					Name: "Tag",
+					Fields: []metadata.FieldMetadata{
+						{Name: "id", Type: "uuid", Required: true},
+						{Name: "name", Type: "string", Required: true},
+					},
+				},
+			},
+		}
+	}
+
+	t.Run("returns error when registry not initialized", func(t *testing.T) {
+		// Reset registry to ensure it's empty
+		metadata.Reset()
+
 		cmd := newIntrospectResourcesCommand()
+		buf := &bytes.Buffer{}
+		cmd.SetOut(buf)
+
 		err := cmd.RunE(cmd, []string{})
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "not yet implemented")
+		assert.Contains(t, err.Error(), "registry not initialized")
+	})
+
+	t.Run("formats default table output", func(t *testing.T) {
+		// Setup test registry
+		metadata.Reset()
+		testMeta := createTestMetadata()
+		data, err := json.Marshal(testMeta)
+		require.NoError(t, err)
+		err = metadata.RegisterMetadata(data)
+		require.NoError(t, err)
+
+		// Reset global flags
+		outputFormat = "table"
+		verbose = false
+		noColor = false
+
+		cmd := newIntrospectResourcesCommand()
+		buf := &bytes.Buffer{}
+		cmd.SetOut(buf)
+
+		err = cmd.RunE(cmd, []string{})
+		require.NoError(t, err)
+
+		output := buf.String()
+
+		// Check header
+		assert.Contains(t, output, "RESOURCES (5 total)")
+
+		// Check categories
+		assert.Contains(t, output, "Core Resources:")
+		assert.Contains(t, output, "Administrative:")
+
+		// Check resources
+		assert.Contains(t, output, "User")
+		assert.Contains(t, output, "Post")
+		assert.Contains(t, output, "Comment")
+		assert.Contains(t, output, "Category")
+		assert.Contains(t, output, "Tag")
+
+		// Check counts
+		assert.Contains(t, output, "4 fields")  // User has 4 fields
+		assert.Contains(t, output, "2 relationships")  // User has 2 relationships
+		assert.Contains(t, output, "1 hook")  // User has 1 hook
+
+		// Check flags
+		assert.Contains(t, output, "auth required")
+		assert.Contains(t, output, "cached")
+		assert.Contains(t, output, "nested")
+	})
+
+	t.Run("formats verbose table output", func(t *testing.T) {
+		// Setup test registry
+		metadata.Reset()
+		testMeta := createTestMetadata()
+		data, err := json.Marshal(testMeta)
+		require.NoError(t, err)
+		err = metadata.RegisterMetadata(data)
+		require.NoError(t, err)
+
+		// Set verbose flag
+		outputFormat = "table"
+		verbose = true
+		noColor = false
+
+		cmd := newIntrospectResourcesCommand()
+		buf := &bytes.Buffer{}
+		cmd.SetOut(buf)
+
+		err = cmd.RunE(cmd, []string{})
+		require.NoError(t, err)
+
+		output := buf.String()
+
+		// In verbose mode, should show detailed breakdown
+		assert.Contains(t, output, "User")
+		assert.Contains(t, output, "Fields: 4")
+		assert.Contains(t, output, "Relationships: 2")
+		assert.Contains(t, output, "Hooks: 1")
+		assert.Contains(t, output, "Flags: auth required")
+
+		// Reset verbose flag
+		verbose = false
+	})
+
+	t.Run("formats JSON output", func(t *testing.T) {
+		// Setup test registry
+		metadata.Reset()
+		testMeta := createTestMetadata()
+		data, err := json.Marshal(testMeta)
+		require.NoError(t, err)
+		err = metadata.RegisterMetadata(data)
+		require.NoError(t, err)
+
+		// Set JSON format
+		outputFormat = "json"
+		verbose = false
+		noColor = false
+
+		cmd := newIntrospectResourcesCommand()
+		buf := &bytes.Buffer{}
+		cmd.SetOut(buf)
+
+		err = cmd.RunE(cmd, []string{})
+		require.NoError(t, err)
+
+		// Parse JSON output
+		var result struct {
+			TotalCount int `json:"total_count"`
+			Resources  []struct {
+				Name              string   `json:"name"`
+				FieldCount        int      `json:"field_count"`
+				RelationshipCount int      `json:"relationship_count"`
+				HookCount         int      `json:"hook_count"`
+				Category          string   `json:"category"`
+				Flags             []string `json:"flags"`
+			} `json:"resources"`
+		}
+
+		err = json.Unmarshal(buf.Bytes(), &result)
+		require.NoError(t, err)
+
+		// Verify JSON structure
+		assert.Equal(t, 5, result.TotalCount)
+		assert.Len(t, result.Resources, 5)
+
+		// Find User resource
+		var userResource *struct {
+			Name              string   `json:"name"`
+			FieldCount        int      `json:"field_count"`
+			RelationshipCount int      `json:"relationship_count"`
+			HookCount         int      `json:"hook_count"`
+			Category          string   `json:"category"`
+			Flags             []string `json:"flags"`
+		}
+		for i := range result.Resources {
+			if result.Resources[i].Name == "User" {
+				userResource = &result.Resources[i]
+				break
+			}
+		}
+
+		require.NotNil(t, userResource)
+		assert.Equal(t, 4, userResource.FieldCount)
+		assert.Equal(t, 2, userResource.RelationshipCount)
+		assert.Equal(t, 1, userResource.HookCount)
+		assert.Equal(t, "Core Resources", userResource.Category)
+		assert.Contains(t, userResource.Flags, "auth_required")
+
+		// Reset format
+		outputFormat = "table"
+	})
+
+	t.Run("categorizes resources correctly", func(t *testing.T) {
+		tests := []struct {
+			name     string
+			expected string
+		}{
+			{"User", "Core Resources"},
+			{"Post", "Core Resources"},
+			{"Comment", "Core Resources"},
+			{"Article", "Core Resources"},
+			{"Category", "Administrative"},
+			{"Tag", "Administrative"},
+			{"Setting", "Administrative"},
+			{"Log", "System"},
+			{"Session", "System"},
+			{"Unknown", "Core Resources"}, // Default
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				result := categorizeResource(tt.name)
+				assert.Equal(t, tt.expected, result)
+			})
+		}
+	})
+
+	t.Run("handles empty registry", func(t *testing.T) {
+		// Setup empty registry
+		metadata.Reset()
+		emptyMeta := &metadata.Metadata{
+			Version:   "1.0.0",
+			Generated: time.Now(),
+			Resources: []metadata.ResourceMetadata{},
+		}
+		data, err := json.Marshal(emptyMeta)
+		require.NoError(t, err)
+		err = metadata.RegisterMetadata(data)
+		require.NoError(t, err)
+
+		outputFormat = "table"
+		verbose = false
+		noColor = false
+
+		cmd := newIntrospectResourcesCommand()
+		buf := &bytes.Buffer{}
+		cmd.SetOut(buf)
+
+		err = cmd.RunE(cmd, []string{})
+		require.NoError(t, err)
+
+		output := buf.String()
+		assert.Contains(t, output, "No resources found")
+	})
+
+	t.Run("respects no-color flag", func(t *testing.T) {
+		// Setup test registry
+		metadata.Reset()
+		testMeta := createTestMetadata()
+		data, err := json.Marshal(testMeta)
+		require.NoError(t, err)
+		err = metadata.RegisterMetadata(data)
+		require.NoError(t, err)
+
+		// Set no-color flag
+		outputFormat = "table"
+		verbose = false
+		noColor = true
+
+		cmd := newIntrospectResourcesCommand()
+		buf := &bytes.Buffer{}
+		cmd.SetOut(buf)
+
+		// Execute command
+		err = cmd.RunE(cmd, []string{})
+		require.NoError(t, err)
+
+		// Note: Testing actual color removal is complex as it depends on the color library
+		// We just verify the command runs successfully with the flag set
+		output := buf.String()
+		assert.NotEmpty(t, output)
+
+		// Reset no-color flag
+		noColor = false
+	})
+
+	// Cleanup after tests
+	t.Cleanup(func() {
+		metadata.Reset()
+		outputFormat = "table"
+		verbose = false
+		noColor = false
+	})
+}
+
+// BenchmarkIntrospectResourcesCommand benchmarks the resources command performance
+func BenchmarkIntrospectResourcesCommand(b *testing.B) {
+	// Setup test registry with realistic data
+	testMeta := &metadata.Metadata{
+		Version:   "1.0.0",
+		Generated: time.Now(),
+		Resources: make([]metadata.ResourceMetadata, 0, 50),
+	}
+
+	// Create 50 resources to simulate a realistic application
+	for i := 0; i < 50; i++ {
+		res := metadata.ResourceMetadata{
+			Name: fmt.Sprintf("Resource%d", i),
+			Fields: []metadata.FieldMetadata{
+				{Name: "id", Type: "uuid", Required: true},
+				{Name: "name", Type: "string", Required: true},
+				{Name: "description", Type: "text", Nullable: true},
+				{Name: "created_at", Type: "timestamp", Required: true},
+				{Name: "updated_at", Type: "timestamp", Required: true},
+			},
+			Relationships: []metadata.RelationshipMetadata{
+				{Name: "parent", Type: "belongs_to", TargetResource: "Parent"},
+				{Name: "children", Type: "has_many", TargetResource: "Child"},
+			},
+			Hooks: []metadata.HookMetadata{
+				{Type: "before_create", Transaction: true},
+			},
+		}
+		testMeta.Resources = append(testMeta.Resources, res)
+	}
+
+	metadata.Reset()
+	data, err := json.Marshal(testMeta)
+	if err != nil {
+		b.Fatal(err)
+	}
+	err = metadata.RegisterMetadata(data)
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	// Reset flags
+	outputFormat = "table"
+	verbose = false
+	noColor = true // Disable color for consistent benchmarking
+
+	cmd := newIntrospectResourcesCommand()
+	buf := &bytes.Buffer{}
+	cmd.SetOut(buf)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		buf.Reset()
+		err := cmd.RunE(cmd, []string{})
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+
+	b.Cleanup(func() {
+		metadata.Reset()
 	})
 }
 
@@ -409,13 +816,16 @@ func TestGetFormatter(t *testing.T) {
 
 func TestFlagParsing(t *testing.T) {
 	t.Run("parses format flag", func(t *testing.T) {
+		// Reset registry for this test
+		metadata.Reset()
+
 		cmd := NewIntrospectCommand()
 		cmd.SetArgs([]string{"resources", "--format", "json"})
 
 		err := cmd.Execute()
-		// Expected to fail with "not yet implemented", but flags should be parsed
+		// Expected to fail with "registry not initialized" since we reset it
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "not yet implemented")
+		assert.Contains(t, err.Error(), "registry not initialized")
 
 		// Check the flag was set correctly
 		formatFlag := cmd.PersistentFlags().Lookup("format")
@@ -424,6 +834,9 @@ func TestFlagParsing(t *testing.T) {
 	})
 
 	t.Run("parses verbose flag", func(t *testing.T) {
+		// Reset registry for this test
+		metadata.Reset()
+
 		cmd := NewIntrospectCommand()
 		cmd.SetArgs([]string{"resources", "--verbose"})
 
@@ -436,6 +849,9 @@ func TestFlagParsing(t *testing.T) {
 	})
 
 	t.Run("parses no-color flag", func(t *testing.T) {
+		// Reset registry for this test
+		metadata.Reset()
+
 		cmd := NewIntrospectCommand()
 		cmd.SetArgs([]string{"resources", "--no-color"})
 
@@ -448,6 +864,9 @@ func TestFlagParsing(t *testing.T) {
 	})
 
 	t.Run("parses multiple flags together", func(t *testing.T) {
+		// Reset registry for this test
+		metadata.Reset()
+
 		cmd := NewIntrospectCommand()
 		cmd.SetArgs([]string{"resources", "--format", "json", "--verbose", "--no-color"})
 
