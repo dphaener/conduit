@@ -665,11 +665,16 @@ func TestIntrospectPatternsCommand(t *testing.T) {
 		assert.Equal(t, "1", flag.DefValue)
 	})
 
-	t.Run("returns not implemented error", func(t *testing.T) {
+	t.Run("returns error when registry not initialized", func(t *testing.T) {
+		metadata.Reset()
+
 		cmd := newIntrospectPatternsCommand()
+		buf := &bytes.Buffer{}
+		cmd.SetOut(buf)
+
 		err := cmd.RunE(cmd, []string{})
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "not yet implemented")
+		assert.Contains(t, err.Error(), "registry not initialized")
 	})
 }
 
