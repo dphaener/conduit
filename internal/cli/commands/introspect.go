@@ -505,9 +505,7 @@ patterns and conventions. This helps with:
   # Output in JSON format
   conduit introspect patterns --format json`,
 		Args: cobra.MaximumNArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return fmt.Errorf("not yet implemented - requires runtime registry")
-		},
+		RunE: runIntrospectPatternsCommand,
 	}
 
 	// Add command-specific flags
@@ -1456,4 +1454,255 @@ func formatRoutesAsJSON(routes []metadata.RouteMetadata, writer io.Writer) error
 	encoder := json.NewEncoder(writer)
 	encoder.SetIndent("", "  ")
 	return encoder.Encode(output)
+}
+
+// runIntrospectPatternsCommand executes the 'introspect patterns [category]' command
+func runIntrospectPatternsCommand(cmd *cobra.Command, args []string) error {
+	// Get optional category filter
+	var categoryFilter string
+	if len(args) > 0 {
+		categoryFilter = args[0]
+	}
+
+	// Get flag values
+	minFrequency, _ := cmd.Flags().GetInt("min-frequency")
+
+	// Validate min-frequency
+	if minFrequency < 0 {
+		return fmt.Errorf("min-frequency must be non-negative, got: %d", minFrequency)
+	}
+
+	// Query all patterns from the registry
+	patterns := metadata.QueryPatterns()
+	if patterns == nil {
+		return fmt.Errorf("registry not initialized - run 'conduit build' first to generate metadata")
+	}
+
+	// Filter by category if specified
+	if categoryFilter != "" {
+		filtered := make([]metadata.PatternMetadata, 0)
+		for _, pattern := range patterns {
+			if strings.EqualFold(pattern.Category, categoryFilter) {
+				filtered = append(filtered, pattern)
+			}
+		}
+		patterns = filtered
+	}
+
+	// Filter by minimum frequency
+	if minFrequency > 1 {
+		filtered := make([]metadata.PatternMetadata, 0)
+		for _, pattern := range patterns {
+			if pattern.Frequency >= minFrequency {
+				filtered = append(filtered, pattern)
+			}
+		}
+		patterns = filtered
+	}
+
+	// Sort patterns by frequency (descending)
+	sort.Slice(patterns, func(i, j int) bool {
+		return patterns[i].Frequency > patterns[j].Frequency
+	})
+
+	// Get the output writer
+	writer := cmd.OutOrStdout()
+
+	// Format output based on the format flag
+	if outputFormat == "json" {
+		return formatPatternsAsJSON(patterns, writer)
+	}
+
+	// Default: table format
+	// Get total resource count for coverage calculation
+	resources := metadata.QueryResources()
+	totalResources := len(resources)
+	return formatPatternsAsTable(patterns, writer, totalResources)
+}
+
+// formatPatternsAsTable formats patterns as a human-readable table
+func formatPatternsAsTable(patterns []metadata.PatternMetadata, writer io.Writer, totalResources int) error {
+	bold := color.New(color.Bold)
+	cyan := color.New(color.FgCyan)
+	green := color.New(color.FgGreen)
+	yellow := color.New(color.FgYellow)
+
+	if len(patterns) == 0 {
+		fmt.Fprintln(writer, "No patterns found.")
+		return nil
+	}
+
+	// Print header
+	bold.Fprintln(writer, "PATTERNS")
+	fmt.Fprintln(writer)
+
+	// Group patterns by category
+	patternsByCategory := make(map[string][]metadata.PatternMetadata)
+	for _, pattern := range patterns {
+		category := pattern.Category
+		if category == "" {
+			category = "Other"
+		}
+		patternsByCategory[category] = append(patternsByCategory[category], pattern)
+	}
+
+	// Sort categories for consistent output
+	categories := make([]string, 0, len(patternsByCategory))
+	for category := range patternsByCategory {
+		categories = append(categories, category)
+	}
+	sort.Strings(categories)
+
+	// Print each category
+	for _, category := range categories {
+		categoryPatterns := patternsByCategory[category]
+
+		// Calculate coverage for this category
+		coverage := calculateCoverage(categoryPatterns, totalResources)
+
+		// Print category header with coverage
+		cyan.Fprintf(writer, "%s (%d patterns, %.0f%% coverage):\n", category, len(categoryPatterns), coverage)
+		fmt.Fprintln(writer)
+
+		// Print patterns in this category
+		for i, pattern := range categoryPatterns {
+			// Pattern name with usage count and confidence
+			fmt.Fprintf(writer, "  %d. %s (%d uses, confidence: %.1f)\n", i+1, pattern.Name, pattern.Frequency, pattern.Confidence)
+			fmt.Fprintln(writer)
+
+			// Template
+			if pattern.Template != "" {
+				fmt.Fprintln(writer, "     Template:")
+				templateLines := strings.Split(pattern.Template, "\n")
+				for _, line := range templateLines {
+					fmt.Fprintf(writer, "     %s\n", line)
+				}
+				fmt.Fprintln(writer)
+			}
+
+			// Examples (limit to first 5)
+			if len(pattern.Examples) > 0 {
+				fmt.Fprintln(writer, "     Used by:")
+				maxExamples := 5
+				if len(pattern.Examples) < maxExamples {
+					maxExamples = len(pattern.Examples)
+				}
+				for j := 0; j < maxExamples; j++ {
+					example := pattern.Examples[j]
+					green.Fprintf(writer, "     • %s", example.Resource)
+					if example.FilePath != "" {
+						fmt.Fprintf(writer, "  %s", example.FilePath)
+						if example.LineNumber > 0 {
+							fmt.Fprintf(writer, ":%d", example.LineNumber)
+						}
+					}
+					fmt.Fprintln(writer)
+				}
+				if len(pattern.Examples) > maxExamples {
+					fmt.Fprintf(writer, "     [... and %d more]\n", len(pattern.Examples)-maxExamples)
+				}
+				fmt.Fprintln(writer)
+			}
+
+			// "When to use" description
+			whenToUse := generateWhenToUse(pattern)
+			if whenToUse != "" {
+				yellow.Fprintln(writer, "     When to use:")
+				fmt.Fprintf(writer, "     %s\n", whenToUse)
+				fmt.Fprintln(writer)
+			}
+		}
+	}
+
+	return nil
+}
+
+// formatPatternsAsJSON formats patterns as JSON
+func formatPatternsAsJSON(patterns []metadata.PatternMetadata, writer io.Writer) error {
+	type JSONOutput struct {
+		TotalCount int                       `json:"total_count"`
+		Patterns   []metadata.PatternMetadata `json:"patterns"`
+	}
+
+	output := JSONOutput{
+		TotalCount: len(patterns),
+		Patterns:   patterns,
+	}
+
+	encoder := json.NewEncoder(writer)
+	encoder.SetIndent("", "  ")
+	return encoder.Encode(output)
+}
+
+// calculateCoverage calculates the percentage of resources using patterns in a category
+func calculateCoverage(patterns []metadata.PatternMetadata, totalResources int) float64 {
+	if totalResources == 0 {
+		return 0.0
+	}
+
+	// Collect unique resources using patterns in this category
+	uniqueResources := make(map[string]bool)
+	for _, pattern := range patterns {
+		for _, example := range pattern.Examples {
+			uniqueResources[example.Resource] = true
+		}
+	}
+
+	return float64(len(uniqueResources)) / float64(totalResources) * 100.0
+}
+
+// generateWhenToUse generates an intelligent "when to use" description based on pattern category
+func generateWhenToUse(pattern metadata.PatternMetadata) string {
+	category := strings.ToLower(pattern.Category)
+	template := strings.ToLower(pattern.Template)
+
+	// Generate description based on category and template content
+	// Check authorization before authentication since "authorization" contains "auth"
+	switch {
+	case strings.Contains(category, "authorization"):
+		if strings.Contains(template, "owner") || strings.Contains(template, "admin") {
+			return "Operations requiring ownership verification or admin privileges"
+		}
+		return "Endpoints requiring specific permissions or roles"
+
+	case strings.Contains(category, "authentication") || strings.Contains(category, "auth"):
+		if strings.Contains(template, "rate_limit") {
+			return "User-generated content creation needing spam protection"
+		}
+		return "Endpoints requiring user authentication"
+
+	case strings.Contains(category, "rate") || strings.Contains(category, "limiting"):
+		return "User-generated content needing spam protection"
+
+	case strings.Contains(category, "caching") || strings.Contains(category, "cache"):
+		return "Frequently accessed read-only data"
+
+	case strings.Contains(category, "validation"):
+		return "Data that requires validation before persistence"
+
+	case strings.Contains(category, "hook"):
+		if strings.Contains(template, "before") {
+			return "Operations requiring pre-processing or validation"
+		}
+		if strings.Contains(template, "after") {
+			return "Operations requiring post-processing or notifications"
+		}
+		return "Lifecycle events requiring custom logic"
+
+	case strings.Contains(category, "constraint"):
+		return "Business rules that must be enforced across operations"
+
+	case strings.Contains(category, "transaction"):
+		return "Operations requiring atomicity and rollback support"
+
+	case strings.Contains(category, "async"):
+		return "Long-running operations that should not block the response"
+
+	default:
+		// Use pattern description if available
+		if pattern.Description != "" {
+			return pattern.Description
+		}
+		return "Common pattern in the codebase"
+	}
 }
