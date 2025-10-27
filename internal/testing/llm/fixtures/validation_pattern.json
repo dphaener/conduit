@@ -1,0 +1,23 @@
+{
+  "id": "validation-001",
+  "name": "validated_field",
+  "category": "validation",
+  "description": "Field with min/max validation constraints",
+  "template": "@min(<value>) @max(<value>)",
+  "examples": [
+    {
+      "resource": "Post",
+      "file_path": "/app/resources/post.cdt",
+      "line_number": 5,
+      "code": "title: string! @min(5) @max(200)"
+    },
+    {
+      "resource": "Comment",
+      "file_path": "/app/resources/comment.cdt",
+      "line_number": 4,
+      "code": "content: text! @min(10) @max(5000)"
+    }
+  ],
+  "frequency": 6,
+  "confidence": 0.92
+}

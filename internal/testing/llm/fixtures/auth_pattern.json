@@ -1,0 +1,29 @@
+{
+  "id": "auth-001",
+  "name": "authenticated_handler",
+  "category": "authentication",
+  "description": "Handler with authentication middleware",
+  "template": "@on <operation>: [auth]",
+  "examples": [
+    {
+      "resource": "Post",
+      "file_path": "/app/resources/post.cdt",
+      "line_number": 10,
+      "code": "@on create: [auth]"
+    },
+    {
+      "resource": "Comment",
+      "file_path": "/app/resources/comment.cdt",
+      "line_number": 15,
+      "code": "@on update: [auth]"
+    },
+    {
+      "resource": "User",
+      "file_path": "/app/resources/user.cdt",
+      "line_number": 20,
+      "code": "@on delete: [auth]"
+    }
+  ],
+  "frequency": 5,
+  "confidence": 0.95
+}

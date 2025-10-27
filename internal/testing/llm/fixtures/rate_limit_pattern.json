@@ -1,0 +1,23 @@
+{
+  "id": "rate-001",
+  "name": "rate_limited_handler",
+  "category": "rate_limiting",
+  "description": "Handler with rate limiting to prevent abuse",
+  "template": "@on <operation>: [rate_limit(10/hour)]",
+  "examples": [
+    {
+      "resource": "Post",
+      "file_path": "/app/resources/post.cdt",
+      "line_number": 25,
+      "code": "@on create: [rate_limit(10/hour)]"
+    },
+    {
+      "resource": "Comment",
+      "file_path": "/app/resources/comment.cdt",
+      "line_number": 18,
+      "code": "@on create: [rate_limit(10/hour)]"
+    }
+  ],
+  "frequency": 3,
+  "confidence": 0.85
+}
