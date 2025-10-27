@@ -10,6 +10,8 @@ import (
 
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
+
+	"github.com/conduit-lang/conduit/runtime/metadata"
 )
 
 var (
@@ -99,9 +101,7 @@ a specific resource.`,
 
   # Show verbose output with all details
   conduit introspect resources --verbose`,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return fmt.Errorf("not yet implemented - requires runtime registry")
-		},
+		RunE: runIntrospectResourcesCommand,
 	}
 }
 
@@ -318,5 +318,317 @@ func GetFormatter(format string, writer io.Writer) (Formatter, error) {
 	default:
 		return nil, fmt.Errorf("unsupported format: %s (supported: json, table)", format)
 	}
+}
+
+// runIntrospectResourcesCommand executes the 'introspect resources' command
+func runIntrospectResourcesCommand(cmd *cobra.Command, args []string) error {
+	// Get resources from the registry
+	resources := metadata.QueryResources()
+	if resources == nil {
+		return fmt.Errorf("registry not initialized - run 'conduit build' first to generate metadata")
+	}
+
+	// Get the output writer
+	writer := cmd.OutOrStdout()
+
+	// Format output based on the format flag
+	if outputFormat == "json" {
+		return formatResourcesAsJSON(resources, writer)
+	}
+
+	// Default: table format
+	return formatResourcesAsTable(resources, writer, verbose)
+}
+
+// ResourceCategory represents a category of resources
+type ResourceCategory struct {
+	Name      string
+	Resources []ResourceSummary
+}
+
+// ResourceSummary contains summary information about a resource
+type ResourceSummary struct {
+	Name            string
+	FieldCount      int
+	RelationshipCount int
+	HookCount       int
+	AuthRequired    bool
+	Cached          bool
+	Nested          bool
+}
+
+// categorizeResources groups resources into categories
+func categorizeResources(resources []metadata.ResourceMetadata) []ResourceCategory {
+	categories := make(map[string][]ResourceSummary)
+
+	for _, res := range resources {
+		summary := ResourceSummary{
+			Name:              res.Name,
+			FieldCount:        len(res.Fields),
+			RelationshipCount: len(res.Relationships),
+			HookCount:         len(res.Hooks),
+		}
+
+		// Analyze middleware to determine flags
+		for op, middlewares := range res.Middleware {
+			_ = op // unused for now
+			for _, mw := range middlewares {
+				if strings.Contains(strings.ToLower(mw), "auth") {
+					summary.AuthRequired = true
+				}
+				if strings.Contains(strings.ToLower(mw), "cache") {
+					summary.Cached = true
+				}
+			}
+		}
+
+		// Determine if resource is nested (has parent relationship)
+		for _, rel := range res.Relationships {
+			if rel.Type == "belongs_to" {
+				summary.Nested = true
+				break
+			}
+		}
+
+		// Categorize based on resource name patterns
+		category := categorizeResource(res.Name)
+		categories[category] = append(categories[category], summary)
+	}
+
+	// Convert to ordered list
+	result := make([]ResourceCategory, 0)
+	categoryOrder := []string{"Core Resources", "Administrative", "System"}
+
+	for _, catName := range categoryOrder {
+		if resources, ok := categories[catName]; ok {
+			result = append(result, ResourceCategory{
+				Name:      catName,
+				Resources: resources,
+			})
+		}
+	}
+
+	// Add any remaining categories
+	for catName, resources := range categories {
+		found := false
+		for _, orderName := range categoryOrder {
+			if catName == orderName {
+				found = true
+				break
+			}
+		}
+		if !found {
+			result = append(result, ResourceCategory{
+				Name:      catName,
+				Resources: resources,
+			})
+		}
+	}
+
+	return result
+}
+
+// categorizeResource determines the category for a resource
+func categorizeResource(name string) string {
+	// Common patterns for categorization
+	corePatterns := []string{"User", "Post", "Comment", "Article", "Page", "Product", "Order"}
+	adminPatterns := []string{"Category", "Tag", "Setting", "Config"}
+	systemPatterns := []string{"Log", "Audit", "Session", "Token", "Job"}
+
+	for _, pattern := range corePatterns {
+		if name == pattern {
+			return "Core Resources"
+		}
+	}
+
+	for _, pattern := range adminPatterns {
+		if name == pattern {
+			return "Administrative"
+		}
+	}
+
+	for _, pattern := range systemPatterns {
+		if name == pattern {
+			return "System"
+		}
+	}
+
+	// Default to Core Resources
+	return "Core Resources"
+}
+
+// formatResourcesAsTable formats resources as a human-readable table
+func formatResourcesAsTable(resources []metadata.ResourceMetadata, writer io.Writer, verbose bool) error {
+	if len(resources) == 0 {
+		fmt.Fprintln(writer, "No resources found.")
+		return nil
+	}
+
+	// Categorize resources
+	categories := categorizeResources(resources)
+
+	// Print header
+	bold := color.New(color.Bold)
+	cyan := color.New(color.FgCyan)
+	green := color.New(color.FgGreen)
+
+	bold.Fprintf(writer, "RESOURCES (%d total)\n\n", len(resources))
+
+	// Print each category
+	for _, category := range categories {
+		if len(category.Resources) == 0 {
+			continue
+		}
+
+		cyan.Fprintf(writer, "%s:\n", category.Name)
+
+		if verbose {
+			// Verbose mode: show detailed information
+			for _, res := range category.Resources {
+				fmt.Fprintf(writer, "  %s\n", res.Name)
+				fmt.Fprintf(writer, "    Fields: %d\n", res.FieldCount)
+				fmt.Fprintf(writer, "    Relationships: %d\n", res.RelationshipCount)
+				fmt.Fprintf(writer, "    Hooks: %d\n", res.HookCount)
+
+				flags := []string{}
+				if res.AuthRequired {
+					flags = append(flags, "auth required")
+				}
+				if res.Cached {
+					flags = append(flags, "cached")
+				}
+				if res.Nested {
+					flags = append(flags, "nested")
+				}
+
+				if len(flags) > 0 {
+					fmt.Fprintf(writer, "    Flags: %s\n", strings.Join(flags, ", "))
+				}
+				fmt.Fprintln(writer)
+			}
+		} else {
+			// Default mode: compact summary
+			for _, res := range category.Resources {
+				// Format: "  User        8 fields  2 relationships  1 hook  ✓ auth required"
+				fmt.Fprintf(writer, "  %-12s", res.Name)
+
+				// Fields
+				if res.FieldCount > 0 {
+					fmt.Fprintf(writer, "%d fields  ", res.FieldCount)
+				} else {
+					fmt.Fprintf(writer, "-           ")
+				}
+
+				// Relationships
+				if res.RelationshipCount > 0 {
+					if res.RelationshipCount == 1 {
+						fmt.Fprintf(writer, "%d relationship   ", res.RelationshipCount)
+					} else {
+						fmt.Fprintf(writer, "%d relationships  ", res.RelationshipCount)
+					}
+				} else {
+					fmt.Fprintf(writer, "-                 ")
+				}
+
+				// Hooks
+				if res.HookCount > 0 {
+					if res.HookCount == 1 {
+						fmt.Fprintf(writer, "%d hook   ", res.HookCount)
+					} else {
+						fmt.Fprintf(writer, "%d hooks  ", res.HookCount)
+					}
+				} else {
+					fmt.Fprintf(writer, "-        ")
+				}
+
+				// Flags
+				flags := []string{}
+				if res.AuthRequired {
+					flags = append(flags, green.Sprint("✓ auth required"))
+				}
+				if res.Cached {
+					flags = append(flags, green.Sprint("✓ cached"))
+				}
+				if res.Nested {
+					flags = append(flags, green.Sprint("✓ nested"))
+				}
+
+				if len(flags) > 0 {
+					fmt.Fprintf(writer, "%s", strings.Join(flags, "  "))
+				}
+
+				fmt.Fprintln(writer)
+			}
+		}
+
+		fmt.Fprintln(writer)
+	}
+
+	return nil
+}
+
+// formatResourcesAsJSON formats resources as JSON
+func formatResourcesAsJSON(resources []metadata.ResourceMetadata, writer io.Writer) error {
+	// Create summary data for JSON output
+	type JSONResourceSummary struct {
+		Name              string   `json:"name"`
+		FieldCount        int      `json:"field_count"`
+		RelationshipCount int      `json:"relationship_count"`
+		HookCount         int      `json:"hook_count"`
+		ValidationCount   int      `json:"validation_count"`
+		ConstraintCount   int      `json:"constraint_count"`
+		Middleware        map[string][]string `json:"middleware,omitempty"`
+		Category          string   `json:"category"`
+		Flags             []string `json:"flags,omitempty"`
+	}
+
+	type JSONOutput struct {
+		TotalCount int                   `json:"total_count"`
+		Resources  []JSONResourceSummary `json:"resources"`
+	}
+
+	output := JSONOutput{
+		TotalCount: len(resources),
+		Resources:  make([]JSONResourceSummary, 0, len(resources)),
+	}
+
+	for _, res := range resources {
+		summary := JSONResourceSummary{
+			Name:              res.Name,
+			FieldCount:        len(res.Fields),
+			RelationshipCount: len(res.Relationships),
+			HookCount:         len(res.Hooks),
+			ValidationCount:   len(res.Validations),
+			ConstraintCount:   len(res.Constraints),
+			Middleware:        res.Middleware,
+			Category:          categorizeResource(res.Name),
+			Flags:             []string{},
+		}
+
+		// Determine flags
+		for _, middlewares := range res.Middleware {
+			for _, mw := range middlewares {
+				if strings.Contains(strings.ToLower(mw), "auth") {
+					summary.Flags = append(summary.Flags, "auth_required")
+				}
+				if strings.Contains(strings.ToLower(mw), "cache") {
+					summary.Flags = append(summary.Flags, "cached")
+				}
+			}
+		}
+
+		for _, rel := range res.Relationships {
+			if rel.Type == "belongs_to" {
+				summary.Flags = append(summary.Flags, "nested")
+				break
+			}
+		}
+
+		output.Resources = append(output.Resources, summary)
+	}
+
+	encoder := json.NewEncoder(writer)
+	encoder.SetIndent("", "  ")
+	return encoder.Encode(output)
 }
 
