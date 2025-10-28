@@ -54,6 +54,7 @@ Features:
 	rootCmd.AddCommand(NewRunCommand())
 	rootCmd.AddCommand(NewWatchCommand())
 	rootCmd.AddCommand(NewMigrateCommand())
+	rootCmd.AddCommand(NewDBCommand())
 	rootCmd.AddCommand(NewGenerateCommand())
 	rootCmd.AddCommand(NewLSPCommand())
 	rootCmd.AddCommand(NewDebugCommand())
