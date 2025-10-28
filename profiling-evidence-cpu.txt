@@ -1,0 +1,165 @@
+File: metadata.test
+Type: cpu
+Time: Oct 27, 2025 at 11:50pm (MDT)
+Duration: 1.31s, Total samples = 1.16s (88.71%)
+Showing nodes accounting for 1.16s, 100% of 1.16s total
+      flat  flat%   sum%        cum   cum%
+     0.62s 53.45% 53.45%      0.62s 53.45%  runtime.kevent /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/runtime/sys_darwin.go:498
+     0.05s  4.31% 57.76%      0.05s  4.31%  internal/runtime/atomic.(*UnsafePointer).Load /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/internal/runtime/atomic/types.go:466 (inline)
+     0.03s  2.59% 60.34%      0.03s  2.59%  runtime.madvise /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/runtime/sys_darwin.go:284
+     0.02s  1.72% 62.07%      0.02s  1.72%  encoding/json.(*decodeState).object /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/encoding/json/decode.go:656
+     0.02s  1.72% 63.79%      0.02s  1.72%  encoding/json.(*decodeState).scanWhile /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/encoding/json/decode.go:293
+     0.02s  1.72% 65.52%      0.02s  1.72%  encoding/json.stateInString /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/encoding/json/scanner.go:346
+     0.02s  1.72% 67.24%      0.02s  1.72%  encoding/json.unquoteBytes /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/encoding/json/decode.go:1194
+     0.02s  1.72% 68.97%      0.02s  1.72%  runtime.pthread_cond_signal /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/runtime/sys_darwin.go:568
+     0.02s  1.72% 70.69%      0.02s  1.72%  runtime.pthread_cond_wait /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/runtime/sys_darwin.go:547
+     0.02s  1.72% 72.41%      0.02s  1.72%  runtime.pthread_kill /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/runtime/sys_darwin.go:208
+     0.01s  0.86% 73.28%      0.01s  0.86%  encoding/json.(*decodeState).object /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/encoding/json/decode.go:733
+     0.01s  0.86% 74.14%      0.01s  0.86%  encoding/json.(*decodeState).object /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/encoding/json/decode.go:752
+     0.01s  0.86% 75.00%      0.01s  0.86%  encoding/json.(*decodeState).object /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/encoding/json/decode.go:814
+     0.01s  0.86% 75.86%      0.01s  0.86%  encoding/json.(*decodeState).scanNext /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/encoding/json/decode.go:288
+     0.01s  0.86% 76.72%      0.01s  0.86%  encoding/json.(*decodeState).scanWhile /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/encoding/json/decode.go:295
+     0.01s  0.86% 77.59%      0.01s  0.86%  encoding/json.(*decodeState).value /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/encoding/json/decode.go:393
+     0.01s  0.86% 78.45%      0.01s  0.86%  encoding/json.checkValid /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/encoding/json/scanner.go:33
+     0.01s  0.86% 79.31%      0.01s  0.86%  encoding/json.checkValid /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/encoding/json/scanner.go:34
+     0.01s  0.86% 80.17%      0.06s  5.17%  encoding/json.checkValid /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/encoding/json/scanner.go:35
+     0.01s  0.86% 81.03%      0.01s  0.86%  encoding/json.stateBeginValue /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/encoding/json/scanner.go:219
+     0.01s  0.86% 81.90%      0.01s  0.86%  encoding/json.stateEndValue /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/encoding/json/scanner.go:280
+     0.01s  0.86% 82.76%      0.01s  0.86%  encoding/json.stateEndValue /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/encoding/json/scanner.go:306
+     0.01s  0.86% 83.62%      0.01s  0.86%  encoding/json.stateInString /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/encoding/json/scanner.go:339
+     0.01s  0.86% 84.48%      0.01s  0.86%  encoding/json.unquoteBytes /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/encoding/json/decode.go:1200
+     0.01s  0.86% 85.34%      0.01s  0.86%  memeqbody /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/internal/bytealg/equal_arm64.s:83
+     0.01s  0.86% 86.21%      0.01s  0.86%  reflect.(*rtype).Kind /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/reflect/type.go:598 (inline)
+     0.01s  0.86% 87.07%      0.01s  0.86%  reflect.(*rtype).Name /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/reflect/type.go:704
+     0.01s  0.86% 87.93%      0.01s  0.86%  reflect.(*rtype).Name /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/reflect/type.go:706
+     0.01s  0.86% 88.79%      0.01s  0.86%  reflect.(*rtype).Name /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/reflect/type.go:708
+     0.01s  0.86% 89.66%      0.01s  0.86%  reflect.(*rtype).Name /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/reflect/type.go:711
+     0.01s  0.86% 90.52%      0.01s  0.86%  reflect.Value.Elem /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/reflect/value.go:1218
+     0.01s  0.86% 91.38%      0.01s  0.86%  reflect.Value.Field /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/reflect/value.go:1294
+     0.01s  0.86% 92.24%      0.01s  0.86%  reflect.Value.grow /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/reflect/value.go:2886
+     0.01s  0.86% 93.10%      0.01s  0.86%  runtime.(*lfstack).pop /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/runtime/lfstack.go:47 (inline)
+     0.01s  0.86% 93.97%      0.01s  0.86%  runtime.(*mheap).allocMSpanLocked /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/runtime/mheap.go:1117
+     0.01s  0.86% 94.83%      0.01s  0.86%  runtime.deductAssistCredit /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/runtime/malloc.go:1333
+     0.01s  0.86% 95.69%      0.01s  0.86%  runtime.mallocgc /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/runtime/malloc.go:1129
+     0.01s  0.86% 96.55%      0.01s  0.86%  runtime.mapassign_faststr /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/runtime/map_faststr.go:260
+     0.01s  0.86% 97.41%      0.01s  0.86%  runtime.newBucket /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/runtime/mprof.go:240
+     0.01s  0.86% 98.28%      0.01s  0.86%  runtime.resolveTypeOff /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/runtime/type.go:169
+     0.01s  0.86% 99.14%      0.01s  0.86%  runtime.scanobject /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/runtime/mgcmark.go:1450
+     0.01s  0.86%   100%      0.01s  0.86%  runtime.usleep /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/runtime/sys_darwin.go:333
+         0     0%   100%      0.01s  0.86%  encoding/json.(*decodeState).array /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/encoding/json/decode.go:538
+         0     0%   100%      0.05s  4.31%  encoding/json.(*decodeState).array /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/encoding/json/decode.go:546
+         0     0%   100%      0.28s 24.14%  encoding/json.(*decodeState).array /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/encoding/json/decode.go:555
+         0     0%   100%      0.04s  3.45%  encoding/json.(*decodeState).literalStore /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/encoding/json/decode.go:852
+         0     0%   100%      0.01s  0.86%  encoding/json.(*decodeState).literalStore /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/encoding/json/decode.go:923
+         0     0%   100%      0.02s  1.72%  encoding/json.(*decodeState).literalStore /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/encoding/json/decode.go:946
+         0     0%   100%      0.03s  2.59%  encoding/json.(*decodeState).object /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/encoding/json/decode.go:600
+         0     0%   100%      0.02s  1.72%  encoding/json.(*decodeState).object /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/encoding/json/decode.go:662
+         0     0%   100%      0.01s  0.86%  encoding/json.(*decodeState).object /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/encoding/json/decode.go:673
+         0     0%   100%      0.02s  1.72%  encoding/json.(*decodeState).object /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/encoding/json/decode.go:675
+         0     0%   100%      0.01s  0.86%  encoding/json.(*decodeState).object /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/encoding/json/decode.go:693
+         0     0%   100%      0.01s  0.86%  encoding/json.(*decodeState).object /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/encoding/json/decode.go:720
+         0     0%   100%      0.31s 26.72%  encoding/json.(*decodeState).object /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/encoding/json/decode.go:755
+         0     0%   100%      0.02s  1.72%  encoding/json.(*decodeState).rescanLiteral /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/encoding/json/decode.go:347
+         0     0%   100%      0.31s 26.72%  encoding/json.(*decodeState).unmarshal /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/encoding/json/decode.go:181
+         0     0%   100%      0.31s 26.72%  encoding/json.(*decodeState).value /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/encoding/json/decode.go:364
+         0     0%   100%      0.31s 26.72%  encoding/json.(*decodeState).value /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/encoding/json/decode.go:374
+         0     0%   100%      0.01s  0.86%  encoding/json.(*decodeState).value /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/encoding/json/decode.go:380
+         0     0%   100%      0.01s  0.86%  encoding/json.(*decodeState).value /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/encoding/json/decode.go:385
+         0     0%   100%      0.07s  6.03%  encoding/json.(*decodeState).value /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/encoding/json/decode.go:388
+         0     0%   100%      0.01s  0.86%  encoding/json.(*scanner).pushParseState /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/encoding/json/scanner.go:179
+         0     0%   100%      0.01s  0.86%  encoding/json.Marshal /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/encoding/json/encode.go:168
+         0     0%   100%      0.08s  6.90%  encoding/json.Unmarshal /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/encoding/json/decode.go:102
+         0     0%   100%      0.31s 26.72%  encoding/json.Unmarshal /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/encoding/json/decode.go:108
+         0     0%   100%      0.04s  3.45%  encoding/json.indirect /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/encoding/json/decode.go:444
+         0     0%   100%      0.01s  0.86%  encoding/json.indirect /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/encoding/json/decode.go:446
+         0     0%   100%      0.01s  0.86%  encoding/json.indirect /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/encoding/json/decode.go:471
+         0     0%   100%      0.01s  0.86%  encoding/json.indirect /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/encoding/json/decode.go:478
+         0     0%   100%      0.01s  0.86%  encoding/json.stateBeginValue /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/encoding/json/scanner.go:222
+         0     0%   100%      0.01s  0.86%  encoding/json.stateBeginValueOrEmpty /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/encoding/json/scanner.go:211
+         0     0%   100%      0.01s  0.86%  github.com/conduit-lang/conduit/runtime/metadata.(*Registry).buildIndexes /Users/darinhaener/code/conduit/runtime/metadata/registry.go:220
+         0     0%   100%      0.01s  0.86%  github.com/conduit-lang/conduit/runtime/metadata.(*Registry).buildIndexes /Users/darinhaener/code/conduit/runtime/metadata/registry.go:227
+         0     0%   100%      0.01s  0.86%  github.com/conduit-lang/conduit/runtime/metadata.(*Registry).buildIndexes /Users/darinhaener/code/conduit/runtime/metadata/registry.go:238
+         0     0%   100%      0.01s  0.86%  github.com/conduit-lang/conduit/runtime/metadata.BenchmarkRegistryInit /Users/darinhaener/code/conduit/runtime/metadata/registry_bench_test.go:12
+         0     0%   100%      0.42s 36.21%  github.com/conduit-lang/conduit/runtime/metadata.BenchmarkRegistryInit /Users/darinhaener/code/conduit/runtime/metadata/registry_bench_test.go:17
+         0     0%   100%      0.39s 33.62%  github.com/conduit-lang/conduit/runtime/metadata.RegisterMetadata /Users/darinhaener/code/conduit/runtime/metadata/registry.go:194
+         0     0%   100%      0.03s  2.59%  github.com/conduit-lang/conduit/runtime/metadata.RegisterMetadata /Users/darinhaener/code/conduit/runtime/metadata/registry.go:203
+         0     0%   100%      0.01s  0.86%  reflect.(*rtype).NumMethod /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/reflect/type.go:609
+         0     0%   100%      0.01s  0.86%  reflect.(*rtype).ptrTo /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/reflect/type.go:1326
+         0     0%   100%      0.01s  0.86%  reflect.(*rtype).typeOff /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/reflect/type.go:562 (inline)
+         0     0%   100%      0.01s  0.86%  reflect.Value.Addr /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/reflect/value.go:273
+         0     0%   100%      0.05s  4.31%  reflect.Value.Grow /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/reflect/value.go:2877
+         0     0%   100%      0.04s  3.45%  reflect.Value.grow /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/reflect/value.go:2890
+         0     0%   100%      0.04s  3.45%  reflect.growslice /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/runtime/slice.go:336
+         0     0%   100%      0.01s  0.86%  reflect.ptrTo /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/reflect/type.go:1368 (inline)
+         0     0%   100%      0.01s  0.86%  reflect.resolveTypeOff /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/runtime/runtime1.go:675
+         0     0%   100%      0.01s  0.86%  runtime.(*gcControllerState).enlistWorker /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/runtime/mgcpacer.go:723
+         0     0%   100%      0.01s  0.86%  runtime.(*gcWork).balance /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/runtime/mgcwork.go:304
+         0     0%   100%      0.02s  1.72%  runtime.(*mcache).nextFree /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/runtime/malloc.go:945
+         0     0%   100%      0.01s  0.86%  runtime.(*mcache).refill /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/runtime/mcache.go:159
+         0     0%   100%      0.01s  0.86%  runtime.(*mcache).refill /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/runtime/mcache.go:182
+         0     0%   100%      0.01s  0.86%  runtime.(*mcentral).cacheSpan /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/runtime/mcentral.go:170
+         0     0%   100%      0.01s  0.86%  runtime.(*mcentral).grow /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/runtime/mcentral.go:254
+         0     0%   100%      0.01s  0.86%  runtime.(*mcentral).uncacheSpan /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/runtime/mcentral.go:244
+         0     0%   100%      0.01s  0.86%  runtime.(*mheap).alloc /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/runtime/mheap.go:956
+         0     0%   100%      0.04s  3.45%  runtime.(*mheap).alloc.func1 /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/runtime/mheap.go:962
+         0     0%   100%      0.01s  0.86%  runtime.(*mheap).allocSpan /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/runtime/mheap.go:1258
+         0     0%   100%      0.03s  2.59%  runtime.(*mheap).allocSpan /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/runtime/mheap.go:1345
+         0     0%   100%      0.01s  0.86%  runtime.(*spanSet).push /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/runtime/mspanset.go:125
+         0     0%   100%      0.01s  0.86%  runtime.(*spanSetBlockAlloc).alloc /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/runtime/mspanset.go:313
+         0     0%   100%      0.02s  1.72%  runtime.findRunnable /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/runtime/proc.go:3622
+         0     0%   100%      0.01s  0.86%  runtime.gcBgMarkWorker /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/runtime/mgc.go:1423
+         0     0%   100%      0.03s  2.59%  runtime.gcBgMarkWorker.func2 /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/runtime/mgc.go:1440
+         0     0%   100%      0.01s  0.86%  runtime.gcBgMarkWorker.func2 /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/runtime/mgc.go:1459
+         0     0%   100%      0.02s  1.72%  runtime.gcDrain /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/runtime/mgcmark.go:1188
+         0     0%   100%      0.01s  0.86%  runtime.gcDrain /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/runtime/mgcmark.go:1212
+         0     0%   100%      0.01s  0.86%  runtime.gcDrain /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/runtime/mgcmark.go:1230
+         0     0%   100%      0.03s  2.59%  runtime.gcDrainMarkWorkerDedicated /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/runtime/mgcmark.go:1112 (inline)
+         0     0%   100%      0.01s  0.86%  runtime.gcDrainMarkWorkerIdle /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/runtime/mgcmark.go:1102 (inline)
+         0     0%   100%      0.62s 53.45%  runtime.gcStart.func3 /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/runtime/mgc.go:771
+         0     0%   100%      0.02s  1.72%  runtime.gopreempt_m /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/runtime/proc.go:4153 (inline)
+         0     0%   100%      0.02s  1.72%  runtime.goschedImpl /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/runtime/proc.go:4133
+         0     0%   100%      0.02s  1.72%  runtime.growslice /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/runtime/slice.go:264
+         0     0%   100%      0.04s  3.45%  runtime.growslice /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/runtime/slice.go:272
+         0     0%   100%      0.01s  0.86%  runtime.hashGrow /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/runtime/map.go:1149
+         0     0%   100%      0.02s  1.72%  runtime.mPark /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/runtime/proc.go:1866 (inline)
+         0     0%   100%      0.06s  5.17%  runtime.mProf_Malloc /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/runtime/mprof.go:450
+         0     0%   100%      0.01s  0.86%  runtime.makeBucketArray /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/runtime/map.go:377
+         0     0%   100%      0.01s  0.86%  runtime.mallocgc /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/runtime/malloc.go:1037
+         0     0%   100%      0.02s  1.72%  runtime.mallocgc /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/runtime/malloc.go:1161
+         0     0%   100%      0.06s  5.17%  runtime.mallocgc /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/runtime/malloc.go:1253
+         0     0%   100%      0.01s  0.86%  runtime.mapaccess1_faststr /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/runtime/map_faststr.go:38
+         0     0%   100%      0.01s  0.86%  runtime.mapassign_faststr /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/runtime/map_faststr.go:296
+         0     0%   100%      0.02s  1.72%  runtime.markroot /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/runtime/mgcmark.go:212
+         0     0%   100%      0.02s  1.72%  runtime.markroot.func1 /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/runtime/mgcmark.go:230
+         0     0%   100%      0.02s  1.72%  runtime.mcall /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/runtime/asm_arm64.s:193
+         0     0%   100%      0.02s  1.72%  runtime.morestack /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/runtime/asm_arm64.s:342
+         0     0%   100%      0.62s 53.45%  runtime.netpoll /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/runtime/netpoll_kqueue.go:107
+         0     0%   100%      0.01s  0.86%  runtime.newarray /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/runtime/malloc.go:1431
+         0     0%   100%      0.01s  0.86%  runtime.newobject /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/runtime/malloc.go:1386
+         0     0%   100%      0.02s  1.72%  runtime.newstack /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/runtime/stack.go:1084
+         0     0%   100%      0.02s  1.72%  runtime.notesleep /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/runtime/lock_sema.go:183
+         0     0%   100%      0.02s  1.72%  runtime.notewakeup /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/runtime/lock_sema.go:163
+         0     0%   100%      0.01s  0.86%  runtime.osyield /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/runtime/os_darwin.go:362 (inline)
+         0     0%   100%      0.02s  1.72%  runtime.park_m /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/runtime/proc.go:4102
+         0     0%   100%      0.02s  1.72%  runtime.preemptM /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/runtime/signal_unix.go:385
+         0     0%   100%      0.01s  0.86%  runtime.preemptone /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/runtime/proc.go:6325
+         0     0%   100%      0.06s  5.17%  runtime.profilealloc /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/runtime/malloc.go:1459
+         0     0%   100%      0.01s  0.86%  runtime.rtype.typeOff /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/runtime/type.go:200 (inline)
+         0     0%   100%      0.02s  1.72%  runtime.schedule /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/runtime/proc.go:3995
+         0     0%   100%      0.02s  1.72%  runtime.semasleep /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/runtime/os_darwin.go:71
+         0     0%   100%      0.02s  1.72%  runtime.semawakeup /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/runtime/os_darwin.go:84
+         0     0%   100%      0.02s  1.72%  runtime.signalM /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/runtime/os_darwin.go:475 (inline)
+         0     0%   100%      0.02s  1.72%  runtime.slicebytetostring /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/runtime/string.go:122
+         0     0%   100%      0.62s 53.45%  runtime.startTheWorldWithSema /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/runtime/proc.go:1664
+         0     0%   100%      0.02s  1.72%  runtime.startm /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/runtime/proc.go:2998
+         0     0%   100%      0.05s  4.31%  runtime.stkbucket /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/runtime/mprof.go:308
+         0     0%   100%      0.01s  0.86%  runtime.stkbucket /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/runtime/mprof.go:328
+         0     0%   100%      0.02s  1.72%  runtime.stopm /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/runtime/proc.go:2885
+         0     0%   100%      0.01s  0.86%  runtime.suspendG /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/runtime/preempt.go:232
+         0     0%   100%      0.01s  0.86%  runtime.suspendG /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/runtime/preempt.go:250
+         0     0%   100%      0.03s  2.59%  runtime.sysUsed /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/runtime/mem.go:77 (inline)
+         0     0%   100%      0.03s  2.59%  runtime.sysUsedOS /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/runtime/mem_darwin.go:33 (inline)
+         0     0%   100%      0.70s 60.34%  runtime.systemstack /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/runtime/asm_arm64.s:244
+         0     0%   100%      0.02s  1.72%  runtime.wakep /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/runtime/proc.go:3120
+         0     0%   100%      0.43s 37.07%  testing.(*B).launch /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/testing/benchmark.go:316
+         0     0%   100%      0.43s 37.07%  testing.(*B).runN /Users/darinhaener/.asdf/installs/golang/1.23.1/go/src/testing/benchmark.go:193
