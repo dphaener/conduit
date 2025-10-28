@@ -56,6 +56,11 @@ func NewWebTemplate() *Template {
 		},
 		Files: []*TemplateFile{
 			{
+				TargetPath: "CLAUDE.md",
+				Template:   true,
+				Content:    GetCLAUDEMDContent(),
+			},
+			{
 				TargetPath: "app/resources/user.cdt",
 				Template:   true,
 				Content: `/// User resource with authentication

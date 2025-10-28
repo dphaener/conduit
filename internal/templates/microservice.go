@@ -62,6 +62,11 @@ func NewMicroserviceTemplate() *Template {
 		},
 		Files: []*TemplateFile{
 			{
+				TargetPath: "CLAUDE.md",
+				Template:   true,
+				Content:    GetCLAUDEMDContent(),
+			},
+			{
 				TargetPath: "app/resources/event.cdt",
 				Template:   true,
 				Content: `/// Event resource for event sourcing

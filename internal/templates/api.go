@@ -45,6 +45,11 @@ func NewAPITemplate() *Template {
 		},
 		Files: []*TemplateFile{
 			{
+				TargetPath: "CLAUDE.md",
+				Template:   true,
+				Content:    GetCLAUDEMDContent(),
+			},
+			{
 				TargetPath: "app/resources/user.cdt",
 				Template:   true,
 				Content: `/// User resource for authentication
