@@ -44,7 +44,7 @@ func (g *Generator) generateHook(resource *ast.ResourceNode, hook *ast.HookNode)
 		g.writeLine("tx, err := db.Begin()")
 		g.writeLine("if err != nil {")
 		g.indent++
-		g.writeLine("return fmt.Errorf(\"failed to begin transaction: %%w\", err)")
+		g.writeLine("return fmt.Errorf(\"failed to begin transaction: %w\", err)")
 		g.indent--
 		g.writeLine("}")
 		g.writeLine("defer tx.Rollback()")
@@ -68,7 +68,7 @@ func (g *Generator) generateHook(resource *ast.ResourceNode, hook *ast.HookNode)
 		g.writeLine("")
 		g.writeLine("if err := tx.Commit(); err != nil {")
 		g.indent++
-		g.writeLine("return fmt.Errorf(\"failed to commit transaction: %%w\", err)")
+		g.writeLine("return fmt.Errorf(\"failed to commit transaction: %w\", err)")
 		g.indent--
 		g.writeLine("}")
 	} else if hook.IsTransaction && asyncFound {
@@ -251,7 +251,7 @@ func (g *Generator) generateRescue(resource *ast.ResourceNode, stmt *ast.RescueS
 	// Assign error to variable if specified
 	if stmt.ErrorVar != "" {
 		g.imports["fmt"] = true
-		g.writeLine("%s := fmt.Errorf(\"%%v\", err)", stmt.ErrorVar)
+		g.writeLine("%s := fmt.Errorf(\"%v\", err)", stmt.ErrorVar)
 	}
 
 	// Generate rescue body

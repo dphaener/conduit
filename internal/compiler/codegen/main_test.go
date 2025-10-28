@@ -196,8 +196,8 @@ func TestGenerateMain_PortConfiguration(t *testing.T) {
 		t.Error("Generated code should default to port 8080")
 	}
 
-	// Verify address formatting (code contains double %% to escape in generated code)
-	if !strings.Contains(code, `fmt.Sprintf(":%%s", port)`) {
+	// Verify address formatting
+	if !strings.Contains(code, `fmt.Sprintf(":%s", port)`) {
 		t.Error("Generated code should format address with port")
 	}
 }

@@ -50,14 +50,14 @@ func (g *Generator) generateCreate(resource *ast.ResourceNode) {
 			strings.Join(values, ", "), receiverName)
 		g.writeLine("if err != nil {")
 		g.indent++
-		g.writeLine("return fmt.Errorf(\"failed to create %s: %%w\", err)", strings.ToLower(resource.Name))
+		g.writeLine("return fmt.Errorf(\"failed to create %s: %w\", err)", strings.ToLower(resource.Name))
 		g.indent--
 		g.writeLine("}")
 	} else {
 		g.writeLine("_, err := db.ExecContext(ctx, query, %s)", strings.Join(values, ", "))
 		g.writeLine("if err != nil {")
 		g.indent++
-		g.writeLine("return fmt.Errorf(\"failed to create %s: %%w\", err)", strings.ToLower(resource.Name))
+		g.writeLine("return fmt.Errorf(\"failed to create %s: %w\", err)", strings.ToLower(resource.Name))
 		g.indent--
 		g.writeLine("}")
 	}
@@ -101,7 +101,7 @@ func (g *Generator) generateFindByID(resource *ast.ResourceNode) {
 
 	g.writeLine("if err != nil {")
 	g.indent++
-	g.writeLine("return nil, fmt.Errorf(\"failed to find %s: %%w\", err)", strings.ToLower(resource.Name))
+	g.writeLine("return nil, fmt.Errorf(\"failed to find %s: %w\", err)", strings.ToLower(resource.Name))
 	g.indent--
 	g.writeLine("}")
 	g.writeLine("")
@@ -147,7 +147,7 @@ func (g *Generator) generateUpdate(resource *ast.ResourceNode) {
 	g.writeLine("_, err := db.ExecContext(ctx, query, %s)", strings.Join(values, ", "))
 	g.writeLine("if err != nil {")
 	g.indent++
-	g.writeLine("return fmt.Errorf(\"failed to update %s: %%w\", err)", strings.ToLower(resource.Name))
+	g.writeLine("return fmt.Errorf(\"failed to update %s: %w\", err)", strings.ToLower(resource.Name))
 	g.indent--
 	g.writeLine("}")
 	g.writeLine("")
@@ -172,7 +172,7 @@ func (g *Generator) generateDelete(resource *ast.ResourceNode) {
 	g.writeLine("_, err := db.ExecContext(ctx, query, %s.ID)", receiverName)
 	g.writeLine("if err != nil {")
 	g.indent++
-	g.writeLine("return fmt.Errorf(\"failed to delete %s: %%w\", err)", strings.ToLower(resource.Name))
+	g.writeLine("return fmt.Errorf(\"failed to delete %s: %w\", err)", strings.ToLower(resource.Name))
 	g.indent--
 	g.writeLine("}")
 	g.writeLine("")
@@ -199,7 +199,7 @@ func (g *Generator) generateFindAll(resource *ast.ResourceNode) {
 	g.writeLine("rows, err := db.QueryContext(ctx, query, limit, offset)")
 	g.writeLine("if err != nil {")
 	g.indent++
-	g.writeLine("return nil, fmt.Errorf(\"failed to query %s: %%w\", err)", strings.ToLower(resource.Name)+"s")
+	g.writeLine("return nil, fmt.Errorf(\"failed to query %s: %w\", err)", strings.ToLower(resource.Name)+"s")
 	g.indent--
 	g.writeLine("}")
 	g.writeLine("defer rows.Close()")
@@ -213,7 +213,7 @@ func (g *Generator) generateFindAll(resource *ast.ResourceNode) {
 	g.writeLine("%s := &%s{}", strings.ToLower(resource.Name[0:1]), resource.Name)
 	g.writeLine("if err := rows.Scan(%s); err != nil {", strings.Join(scanTargets, ", "))
 	g.indent++
-	g.writeLine("return nil, fmt.Errorf(\"failed to scan %s: %%w\", err)", strings.ToLower(resource.Name))
+	g.writeLine("return nil, fmt.Errorf(\"failed to scan %s: %w\", err)", strings.ToLower(resource.Name))
 	g.indent--
 	g.writeLine("}")
 	g.writeLine("results = append(results, %s)", strings.ToLower(resource.Name[0:1]))
@@ -224,7 +224,7 @@ func (g *Generator) generateFindAll(resource *ast.ResourceNode) {
 
 	g.writeLine("if err := rows.Err(); err != nil {")
 	g.indent++
-	g.writeLine("return nil, fmt.Errorf(\"error iterating %s: %%w\", err)", strings.ToLower(resource.Name)+"s")
+	g.writeLine("return nil, fmt.Errorf(\"error iterating %s: %w\", err)", strings.ToLower(resource.Name)+"s")
 	g.indent--
 	g.writeLine("}")
 	g.writeLine("")

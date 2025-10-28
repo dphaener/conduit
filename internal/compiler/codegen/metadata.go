@@ -58,7 +58,7 @@ func (g *Generator) GenerateMetadataAccessor(metadataJSON string) (string, error
 	g.writeLine("var meta map[string]interface{}")
 	g.writeLine("if err := json.Unmarshal([]byte(Metadata), &meta); err != nil {")
 	g.indent++
-	g.writeLine("return nil, fmt.Errorf(\"failed to parse metadata: %%w\", err)")
+	g.writeLine("return nil, fmt.Errorf(\"failed to parse metadata: %w\", err)")
 	g.indent--
 	g.writeLine("}")
 	g.writeLine("return meta, nil")
@@ -163,7 +163,7 @@ func (g *Generator) GenerateMetadataAccessor(metadataJSON string) (string, error
 	g.indent--
 	g.writeLine("}")
 	g.writeLine("")
-	g.writeLine("return nil, fmt.Errorf(\"resource not found: %%s\", name)")
+	g.writeLine("return nil, fmt.Errorf(\"resource not found: %s\", name)")
 	g.indent--
 	g.writeLine("}")
 
@@ -226,14 +226,14 @@ func (g *Generator) EmbedMetadata(metadataJSON string) (string, error) {
 	g.writeLine("decompressed, err := decompressMetadata(embeddedMetadata)")
 	g.writeLine("if err != nil {")
 	g.indent++
-	g.writeLine("panic(fmt.Sprintf(\"Failed to decompress embedded metadata: %%v\", err))")
+	g.writeLine("panic(fmt.Sprintf(\"Failed to decompress embedded metadata: %v\", err))")
 	g.indent--
 	g.writeLine("}")
 	g.writeLine("")
 	g.writeLine("// Register with runtime")
 	g.writeLine("if err := metadata.RegisterMetadata(decompressed); err != nil {")
 	g.indent++
-	g.writeLine("panic(fmt.Sprintf(\"Failed to register metadata: %%v\", err))")
+	g.writeLine("panic(fmt.Sprintf(\"Failed to register metadata: %v\", err))")
 	g.indent--
 	g.writeLine("}")
 	g.indent--

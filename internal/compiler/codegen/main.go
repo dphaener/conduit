@@ -42,7 +42,7 @@ func (g *Generator) generateMainFunction(resources []*ast.ResourceNode) {
 	g.writeLine("db, err := initDB()")
 	g.writeLine("if err != nil {")
 	g.indent++
-	g.writeLine("log.Fatalf(\"Failed to initialize database: %%v\", err)")
+	g.writeLine("log.Fatalf(\"Failed to initialize database: %v\", err)")
 	g.indent--
 	g.writeLine("}")
 	g.writeLine("defer db.Close()")
@@ -88,13 +88,13 @@ func (g *Generator) generateMainFunction(resources []*ast.ResourceNode) {
 	g.writeLine("}")
 	g.writeLine("")
 
-	g.writeLine("addr := fmt.Sprintf(\":%%s\", port)")
-	g.writeLine("log.Printf(\"Server starting on %%s\", addr)")
+	g.writeLine("addr := fmt.Sprintf(\":%s\", port)")
+	g.writeLine("log.Printf(\"Server starting on %s\", addr)")
 	g.writeLine("")
 
 	g.writeLine("if err := http.ListenAndServe(addr, r); err != nil {")
 	g.indent++
-	g.writeLine("log.Fatalf(\"Server failed: %%v\", err)")
+	g.writeLine("log.Fatalf(\"Server failed: %v\", err)")
 	g.indent--
 	g.writeLine("}")
 
@@ -128,7 +128,7 @@ func (g *Generator) generateInitDBFunction() {
 	g.writeLine("db, err := sql.Open(\"pgx\", dbURL)")
 	g.writeLine("if err != nil {")
 	g.indent++
-	g.writeLine("return nil, fmt.Errorf(\"failed to open database: %%w\", err)")
+	g.writeLine("return nil, fmt.Errorf(\"failed to open database: %w\", err)")
 	g.indent--
 	g.writeLine("}")
 	g.writeLine("")
@@ -138,7 +138,7 @@ func (g *Generator) generateInitDBFunction() {
 	g.writeLine("if err := db.Ping(); err != nil {")
 	g.indent++
 	g.writeLine("db.Close()")
-	g.writeLine("return nil, fmt.Errorf(\"failed to ping database: %%w\", err)")
+	g.writeLine("return nil, fmt.Errorf(\"failed to ping database: %w\", err)")
 	g.indent--
 	g.writeLine("}")
 	g.writeLine("")

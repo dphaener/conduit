@@ -171,7 +171,7 @@ func (g *Generator) generateListHandler(resource *ast.ResourceNode) {
 	g.writeLine("results, err := models.FindAll%s(ctx, db, limit, offset)", resource.Name)
 	g.writeLine("if err != nil {")
 	g.indent++
-	g.writeLine("http.Error(w, fmt.Sprintf(\"Failed to list %s: %%v\", err), http.StatusInternalServerError)", resourceLower+"s")
+	g.writeLine("http.Error(w, fmt.Sprintf(\"Failed to list %s: %v\", err), http.StatusInternalServerError)", resourceLower+"s")
 	g.writeLine("return")
 	g.indent--
 	g.writeLine("}")
@@ -181,7 +181,7 @@ func (g *Generator) generateListHandler(resource *ast.ResourceNode) {
 	g.writeLine("w.Header().Set(\"Content-Type\", \"application/json\")")
 	g.writeLine("if err := json.NewEncoder(w).Encode(results); err != nil {")
 	g.indent++
-	g.writeLine("http.Error(w, fmt.Sprintf(\"Failed to encode response: %%v\", err), http.StatusInternalServerError)")
+	g.writeLine("http.Error(w, fmt.Sprintf(\"Failed to encode response: %v\", err), http.StatusInternalServerError)")
 	g.writeLine("return")
 	g.indent--
 	g.writeLine("}")
@@ -220,7 +220,7 @@ func (g *Generator) generateGetHandler(resource *ast.ResourceNode) {
 	g.writeLine("return")
 	g.indent--
 	g.writeLine("}")
-	g.writeLine("http.Error(w, fmt.Sprintf(\"Failed to get %s: %%v\", err), http.StatusInternalServerError)", resourceLower)
+	g.writeLine("http.Error(w, fmt.Sprintf(\"Failed to get %s: %v\", err), http.StatusInternalServerError)", resourceLower)
 	g.writeLine("return")
 	g.indent--
 	g.writeLine("}")
@@ -230,7 +230,7 @@ func (g *Generator) generateGetHandler(resource *ast.ResourceNode) {
 	g.writeLine("w.Header().Set(\"Content-Type\", \"application/json\")")
 	g.writeLine("if err := json.NewEncoder(w).Encode(result); err != nil {")
 	g.indent++
-	g.writeLine("http.Error(w, fmt.Sprintf(\"Failed to encode response: %%v\", err), http.StatusInternalServerError)")
+	g.writeLine("http.Error(w, fmt.Sprintf(\"Failed to encode response: %v\", err), http.StatusInternalServerError)")
 	g.writeLine("return")
 	g.indent--
 	g.writeLine("}")
@@ -262,7 +262,7 @@ func (g *Generator) generateCreateHandler(resource *ast.ResourceNode) {
 	g.writeLine("var %s models.%s", receiverName, resource.Name)
 	g.writeLine("if err := json.NewDecoder(r.Body).Decode(&%s); err != nil {", receiverName)
 	g.indent++
-	g.writeLine("http.Error(w, fmt.Sprintf(\"Invalid request body: %%v\", err), http.StatusBadRequest)")
+	g.writeLine("http.Error(w, fmt.Sprintf(\"Invalid request body: %v\", err), http.StatusBadRequest)")
 	g.writeLine("return")
 	g.indent--
 	g.writeLine("}")
@@ -272,7 +272,7 @@ func (g *Generator) generateCreateHandler(resource *ast.ResourceNode) {
 	g.writeLine("// Create %s (includes validation and hooks)", resourceLower)
 	g.writeLine("if err := %s.Create(ctx, db); err != nil {", receiverName)
 	g.indent++
-	g.writeLine("http.Error(w, fmt.Sprintf(\"Failed to create %s: %%v\", err), http.StatusUnprocessableEntity)", resourceLower)
+	g.writeLine("http.Error(w, fmt.Sprintf(\"Failed to create %s: %v\", err), http.StatusUnprocessableEntity)", resourceLower)
 	g.writeLine("return")
 	g.indent--
 	g.writeLine("}")
@@ -283,7 +283,7 @@ func (g *Generator) generateCreateHandler(resource *ast.ResourceNode) {
 	g.writeLine("w.WriteHeader(http.StatusCreated)")
 	g.writeLine("if err := json.NewEncoder(w).Encode(%s); err != nil {", receiverName)
 	g.indent++
-	g.writeLine("http.Error(w, fmt.Sprintf(\"Failed to encode response: %%v\", err), http.StatusInternalServerError)")
+	g.writeLine("http.Error(w, fmt.Sprintf(\"Failed to encode response: %v\", err), http.StatusInternalServerError)")
 	g.writeLine("return")
 	g.indent--
 	g.writeLine("}")
@@ -318,7 +318,7 @@ func (g *Generator) generateUpdateHandler(resource *ast.ResourceNode) {
 	g.writeLine("var %s models.%s", receiverName, resource.Name)
 	g.writeLine("if err := json.NewDecoder(r.Body).Decode(&%s); err != nil {", receiverName)
 	g.indent++
-	g.writeLine("http.Error(w, fmt.Sprintf(\"Invalid request body: %%v\", err), http.StatusBadRequest)")
+	g.writeLine("http.Error(w, fmt.Sprintf(\"Invalid request body: %v\", err), http.StatusBadRequest)")
 	g.writeLine("return")
 	g.indent--
 	g.writeLine("}")
@@ -333,7 +333,7 @@ func (g *Generator) generateUpdateHandler(resource *ast.ResourceNode) {
 	g.writeLine("// Update %s (includes validation and hooks)", resourceLower)
 	g.writeLine("if err := %s.Update(ctx, db); err != nil {", receiverName)
 	g.indent++
-	g.writeLine("http.Error(w, fmt.Sprintf(\"Failed to update %s: %%v\", err), http.StatusUnprocessableEntity)", resourceLower)
+	g.writeLine("http.Error(w, fmt.Sprintf(\"Failed to update %s: %v\", err), http.StatusUnprocessableEntity)", resourceLower)
 	g.writeLine("return")
 	g.indent--
 	g.writeLine("}")
@@ -343,7 +343,7 @@ func (g *Generator) generateUpdateHandler(resource *ast.ResourceNode) {
 	g.writeLine("w.Header().Set(\"Content-Type\", \"application/json\")")
 	g.writeLine("if err := json.NewEncoder(w).Encode(%s); err != nil {", receiverName)
 	g.indent++
-	g.writeLine("http.Error(w, fmt.Sprintf(\"Failed to encode response: %%v\", err), http.StatusInternalServerError)")
+	g.writeLine("http.Error(w, fmt.Sprintf(\"Failed to encode response: %v\", err), http.StatusInternalServerError)")
 	g.writeLine("return")
 	g.indent--
 	g.writeLine("}")
@@ -384,7 +384,7 @@ func (g *Generator) generateDeleteHandler(resource *ast.ResourceNode) {
 	g.writeLine("return")
 	g.indent--
 	g.writeLine("}")
-	g.writeLine("http.Error(w, fmt.Sprintf(\"Failed to find %s: %%v\", err), http.StatusInternalServerError)", resourceLower)
+	g.writeLine("http.Error(w, fmt.Sprintf(\"Failed to find %s: %v\", err), http.StatusInternalServerError)", resourceLower)
 	g.writeLine("return")
 	g.indent--
 	g.writeLine("}")
@@ -394,7 +394,7 @@ func (g *Generator) generateDeleteHandler(resource *ast.ResourceNode) {
 	g.writeLine("// Delete %s (includes hooks)", resourceLower)
 	g.writeLine("if err := %s.Delete(ctx, db); err != nil {", receiverName)
 	g.indent++
-	g.writeLine("http.Error(w, fmt.Sprintf(\"Failed to delete %s: %%v\", err), http.StatusInternalServerError)", resourceLower)
+	g.writeLine("http.Error(w, fmt.Sprintf(\"Failed to delete %s: %v\", err), http.StatusInternalServerError)", resourceLower)
 	g.writeLine("return")
 	g.indent--
 	g.writeLine("}")

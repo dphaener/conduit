@@ -427,10 +427,10 @@ func (g *Generator) generateStdlibCall(call *ast.CallExpr) string {
 	// ============================================================================
 	case "Logger.warn":
 		g.imports["log"] = true
-		return fmt.Sprintf("log.Printf(\"WARN: %%s\", %s)", argsStr)
+		return fmt.Sprintf("log.Printf(\"WARN: %s\", %s)", argsStr)
 	case "Logger.debug":
 		g.imports["log"] = true
-		return fmt.Sprintf("log.Printf(\"DEBUG: %%s\", %s)", argsStr)
+		return fmt.Sprintf("log.Printf(\"DEBUG: %s\", %s)", argsStr)
 
 	// ============================================================================
 	// Context namespace - request context operations
