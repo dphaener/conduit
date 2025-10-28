@@ -15,6 +15,7 @@ import (
 	"github.com/conduit-lang/conduit/internal/compiler/lexer"
 	"github.com/conduit-lang/conduit/internal/compiler/parser"
 	"github.com/conduit-lang/conduit/internal/compiler/typechecker"
+	"github.com/conduit-lang/conduit/internal/utils"
 )
 
 // BuildMode represents the compilation mode
@@ -322,8 +323,8 @@ func (s *System) IncrementalBuild(ctx context.Context, changedFiles []string) (*
 
 // findSourceFiles finds all .cdt files in the source directory
 func (s *System) findSourceFiles() ([]string, error) {
-	pattern := filepath.Join(s.options.SourceDir, "*.cdt")
-	files, err := filepath.Glob(pattern)
+	// Find all .cdt files recursively
+	files, err := utils.FindCdtFiles(s.options.SourceDir)
 	if err != nil {
 		return nil, err
 	}

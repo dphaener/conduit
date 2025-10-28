@@ -14,6 +14,7 @@ import (
 	"github.com/conduit-lang/conduit/internal/compiler/lexer"
 	"github.com/conduit-lang/conduit/internal/compiler/parser"
 	"github.com/conduit-lang/conduit/internal/docs"
+	"github.com/conduit-lang/conduit/internal/utils"
 	"github.com/conduit-lang/conduit/internal/watch"
 )
 
@@ -257,8 +258,8 @@ func parseFormats(formatStr string) []docs.Format {
 func parseConduitSources() (*ast.Program, error) {
 	const maxResources = 1000 // reasonable limit
 
-	// Find all .cdt files
-	files, err := filepath.Glob("app/*.cdt")
+	// Find all .cdt files (recursively)
+	files, err := utils.FindCdtFiles("app")
 	if err != nil {
 		return nil, fmt.Errorf("failed to find .cdt files: %w", err)
 	}

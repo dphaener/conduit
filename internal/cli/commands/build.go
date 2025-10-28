@@ -19,6 +19,7 @@ import (
 	"github.com/conduit-lang/conduit/internal/compiler/lexer"
 	"github.com/conduit-lang/conduit/internal/compiler/parser"
 	"github.com/conduit-lang/conduit/internal/compiler/typechecker"
+	"github.com/conduit-lang/conduit/internal/utils"
 )
 
 var (
@@ -101,8 +102,8 @@ func runBuild(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("app/ directory not found - are you in a Conduit project?")
 	}
 
-	// Find all .cdt files
-	cdtFiles, err := filepath.Glob("app/*.cdt")
+	// Find all .cdt files (recursively)
+	cdtFiles, err := utils.FindCdtFiles("app")
 	if err != nil {
 		return fmt.Errorf("failed to find .cdt files: %w", err)
 	}

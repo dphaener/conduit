@@ -12,6 +12,7 @@ import (
 	"github.com/conduit-lang/conduit/internal/compiler/lexer"
 	"github.com/conduit-lang/conduit/internal/compiler/parser"
 	"github.com/conduit-lang/conduit/internal/compiler/typechecker"
+	"github.com/conduit-lang/conduit/internal/utils"
 )
 
 // IncrementalCompiler handles incremental compilation of changed files
@@ -232,7 +233,7 @@ func (ic *IncrementalCompiler) FullBuild() (*CompileResult, error) {
 	ic.resourceCache = make(map[string][]*ast.ResourceNode)
 
 	// Find all .cdt files
-	cdtFiles, err := filepath.Glob("app/*.cdt")
+	cdtFiles, err := utils.FindCdtFiles("app")
 	if err != nil {
 		return nil, fmt.Errorf("failed to find .cdt files: %w", err)
 	}
