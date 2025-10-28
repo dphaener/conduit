@@ -1,0 +1,44 @@
+{
+  "target_success_rates": {
+    "claude-opus": 0.80,
+    "claude-sonnet": 0.75,
+    "gpt-4": 0.70,
+    "gpt-3.5-turbo": 0.60
+  },
+  "minimum_pattern_success": 0.50,
+  "max_iterations": 5,
+  "stop_on_success": true,
+  "description": "Success criteria for pattern validation testing",
+  "rationale": {
+    "claude_opus_target": "80% - Premium model should have high pattern adherence",
+    "gpt_4_target": "70% - Strong model with good pattern understanding",
+    "minimum_pattern": "50% - No pattern should fail more than half the time",
+    "max_iterations": "5 - Sufficient for convergence without excessive runtime"
+  },
+  "test_scenarios": [
+    {
+      "name": "baseline",
+      "description": "First iteration with default parameters",
+      "expected_patterns": ["authenticated_handler", "cached_handler"],
+      "expected_tests_per_pattern": 2
+    },
+    {
+      "name": "parameter_tuning",
+      "description": "Adjust MinFrequency based on pattern_too_specific failures",
+      "adjustment": "Lower MinFrequency from 3 to 2",
+      "expected_improvement": 0.1
+    },
+    {
+      "name": "name_improvement",
+      "description": "Enable VerboseNames for name_unclear failures",
+      "adjustment": "Set VerboseNames to true",
+      "expected_improvement": 0.15
+    },
+    {
+      "name": "confidence_filtering",
+      "description": "Raise MinConfidence for pattern_too_generic failures",
+      "adjustment": "Increase MinConfidence from 0.3 to 0.4",
+      "expected_improvement": 0.1
+    }
+  ]
+}

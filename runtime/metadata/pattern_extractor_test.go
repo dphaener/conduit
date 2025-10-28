@@ -13,8 +13,24 @@ func TestNewPatternExtractor(t *testing.T) {
 		t.Fatal("NewPatternExtractor returned nil")
 	}
 
-	if pe.minFrequency != 3 {
-		t.Errorf("Expected minFrequency to be 3, got %d", pe.minFrequency)
+	if pe.params.MinFrequency != 3 {
+		t.Errorf("Expected MinFrequency to be 3, got %d", pe.params.MinFrequency)
+	}
+
+	if pe.params.MinConfidence != 0.3 {
+		t.Errorf("Expected MinConfidence to be 0.3, got %f", pe.params.MinConfidence)
+	}
+
+	if pe.params.MaxExamples != 5 {
+		t.Errorf("Expected MaxExamples to be 5, got %d", pe.params.MaxExamples)
+	}
+
+	if !pe.params.IncludeDescriptions {
+		t.Error("Expected IncludeDescriptions to be true")
+	}
+
+	if pe.params.VerboseNames {
+		t.Error("Expected VerboseNames to be false")
 	}
 }
 
@@ -328,9 +344,12 @@ func TestGeneratePatternName(t *testing.T) {
 		},
 	}
 
+	// Create empty usages for testing non-verbose names
+	emptyUsages := []patternUsage{}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := pe.generatePatternName(tt.middleware)
+			result := pe.generatePatternName(tt.middleware, emptyUsages)
 			if result != tt.expected {
 				t.Errorf("Expected '%s', got '%s'", tt.expected, result)
 			}
@@ -649,5 +668,249 @@ func BenchmarkExtractMiddlewarePatterns_50Resources(b *testing.B) {
 	// Verify performance target (<50ms)
 	if avgTime > 50*time.Millisecond {
 		b.Errorf("Performance target missed: expected <50ms, got %v", avgTime)
+	}
+}
+
+// TestPatternExtractorWithCustomParams tests pattern extraction with custom parameters.
+func TestPatternExtractorWithCustomParams(t *testing.T) {
+	t.Run("MinFrequency=2 includes more patterns", func(t *testing.T) {
+		params := DefaultParams()
+		params.MinFrequency = 2
+		params.MinConfidence = 0.0 // Disable confidence filtering for this test
+		pe := NewPatternExtractorWithParams(params)
+
+		resources := []ResourceMetadata{
+			{Name: "Post", FilePath: "/app/post.cdt", Middleware: map[string][]string{
+				"create": {"auth"},
+				"update": {"auth"},
+			}},
+			{Name: "Comment", FilePath: "/app/comment.cdt", Middleware: map[string][]string{
+				"create": {"cache"}, // Only appears twice
+				"list":   {"cache"},
+			}},
+		}
+
+		patterns := pe.ExtractMiddlewarePatterns(resources)
+
+		// With MinFrequency=2, both patterns should be extracted
+		if len(patterns) != 2 {
+			t.Errorf("Expected 2 patterns with MinFrequency=2, got %d", len(patterns))
+		}
+	})
+
+	t.Run("MinConfidence filters low-confidence patterns", func(t *testing.T) {
+		params := DefaultParams()
+		params.MinFrequency = 2
+		params.MinConfidence = 0.5 // Requires frequency >= 5
+		pe := NewPatternExtractorWithParams(params)
+
+		resources := []ResourceMetadata{
+			{Name: "Post", FilePath: "/app/post.cdt", Middleware: map[string][]string{
+				"create": {"auth"},
+				"update": {"auth"},
+			}},
+			{Name: "Comment", FilePath: "/app/comment.cdt", Middleware: map[string][]string{
+				"create": {"auth"},
+			}},
+		}
+
+		patterns := pe.ExtractMiddlewarePatterns(resources)
+
+		// Frequency is 3, confidence is 0.3, should be filtered out
+		if len(patterns) != 0 {
+			t.Errorf("Expected 0 patterns with MinConfidence=0.5, got %d", len(patterns))
+		}
+	})
+
+	t.Run("MaxExamples limits example count", func(t *testing.T) {
+		params := DefaultParams()
+		params.MaxExamples = 2
+		pe := NewPatternExtractorWithParams(params)
+
+		resources := []ResourceMetadata{
+			{Name: "Post", FilePath: "/app/post.cdt", Middleware: map[string][]string{
+				"create": {"auth"},
+				"update": {"auth"},
+			}},
+			{Name: "Comment", FilePath: "/app/comment.cdt", Middleware: map[string][]string{
+				"create": {"auth"},
+			}},
+		}
+
+		patterns := pe.ExtractMiddlewarePatterns(resources)
+
+		if len(patterns) != 1 {
+			t.Fatalf("Expected 1 pattern, got %d", len(patterns))
+		}
+
+		// Should only have 2 examples despite 3 usages
+		if len(patterns[0].Examples) != 2 {
+			t.Errorf("Expected 2 examples with MaxExamples=2, got %d", len(patterns[0].Examples))
+		}
+
+		// Frequency should still reflect total usages
+		if patterns[0].Frequency != 3 {
+			t.Errorf("Expected frequency 3, got %d", patterns[0].Frequency)
+		}
+	})
+
+	t.Run("IncludeDescriptions=false removes descriptions", func(t *testing.T) {
+		params := DefaultParams()
+		params.IncludeDescriptions = false
+		pe := NewPatternExtractorWithParams(params)
+
+		resources := []ResourceMetadata{
+			{Name: "Post", FilePath: "/app/post.cdt", Middleware: map[string][]string{
+				"create": {"auth"},
+				"update": {"auth"},
+			}},
+			{Name: "Comment", FilePath: "/app/comment.cdt", Middleware: map[string][]string{
+				"create": {"auth"},
+			}},
+		}
+
+		patterns := pe.ExtractMiddlewarePatterns(resources)
+
+		if len(patterns) != 1 {
+			t.Fatalf("Expected 1 pattern, got %d", len(patterns))
+		}
+
+		if patterns[0].Description != "" {
+			t.Errorf("Expected empty description with IncludeDescriptions=false, got '%s'", patterns[0].Description)
+		}
+	})
+
+	t.Run("VerboseNames generates detailed names", func(t *testing.T) {
+		params := DefaultParams()
+		params.VerboseNames = true
+		pe := NewPatternExtractorWithParams(params)
+
+		resources := []ResourceMetadata{
+			{Name: "Post", FilePath: "/app/post.cdt", Middleware: map[string][]string{
+				"create": {"auth"},
+				"update": {"auth"},
+			}},
+			{Name: "Comment", FilePath: "/app/comment.cdt", Middleware: map[string][]string{
+				"create": {"auth"},
+			}},
+		}
+
+		patterns := pe.ExtractMiddlewarePatterns(resources)
+
+		if len(patterns) != 1 {
+			t.Fatalf("Expected 1 pattern, got %d", len(patterns))
+		}
+
+		// Should include operation context (most common operation)
+		// We have 2 "create" and 1 "update", so "create" should be selected
+		if patterns[0].Name != "authenticated_handler_for_create" {
+			t.Errorf("Expected 'authenticated_handler_for_create' with VerboseNames, got '%s'", patterns[0].Name)
+		}
+	})
+
+	t.Run("VerboseNames with parameters", func(t *testing.T) {
+		params := DefaultParams()
+		params.VerboseNames = true
+		pe := NewPatternExtractorWithParams(params)
+
+		resources := []ResourceMetadata{
+			{Name: "Post", FilePath: "/app/post.cdt", Middleware: map[string][]string{
+				"list": {"cache(300)"},
+			}},
+			{Name: "Comment", FilePath: "/app/comment.cdt", Middleware: map[string][]string{
+				"list": {"cache(300)"},
+			}},
+			{Name: "Tag", FilePath: "/app/tag.cdt", Middleware: map[string][]string{
+				"list": {"cache(300)"},
+			}},
+		}
+
+		patterns := pe.ExtractMiddlewarePatterns(resources)
+
+		if len(patterns) != 1 {
+			t.Fatalf("Expected 1 pattern, got %d", len(patterns))
+		}
+
+		// Should include parameter details and operation
+		// Format: <middleware>_handler_with_<params>_for_<operation>
+		expectedName := "cached_handler_with_300_for_list"
+		if patterns[0].Name != expectedName {
+			t.Errorf("Expected '%s' with VerboseNames, got '%s'", expectedName, patterns[0].Name)
+		}
+	})
+
+	t.Run("Combined custom params", func(t *testing.T) {
+		params := PatternExtractionParams{
+			MinFrequency:        2,
+			MinConfidence:       0.2,
+			MaxExamples:         1,
+			IncludeDescriptions: false,
+			VerboseNames:        true,
+		}
+		pe := NewPatternExtractorWithParams(params)
+
+		resources := []ResourceMetadata{
+			{Name: "Post", FilePath: "/app/post.cdt", Middleware: map[string][]string{
+				"create": {"auth", "rate_limit(5/hour)"},
+			}},
+			{Name: "Comment", FilePath: "/app/comment.cdt", Middleware: map[string][]string{
+				"create": {"auth", "rate_limit(5/hour)"},
+			}},
+		}
+
+		patterns := pe.ExtractMiddlewarePatterns(resources)
+
+		if len(patterns) != 1 {
+			t.Fatalf("Expected 1 pattern, got %d", len(patterns))
+		}
+
+		pattern := patterns[0]
+
+		// Check VerboseNames - params are combined at the end
+		// Format: <middleware1>_<middleware2>_handler_with_<params>_for_<operation>
+		expectedName := "authenticated_rate_limited_handler_with_5_per_hour_for_create"
+		if pattern.Name != expectedName {
+			t.Errorf("Expected name '%s', got '%s'", expectedName, pattern.Name)
+		}
+
+		// Check MaxExamples
+		if len(pattern.Examples) != 1 {
+			t.Errorf("Expected 1 example, got %d", len(pattern.Examples))
+		}
+
+		// Check IncludeDescriptions
+		if pattern.Description != "" {
+			t.Errorf("Expected empty description, got '%s'", pattern.Description)
+		}
+
+		// Check frequency still correct
+		if pattern.Frequency != 2 {
+			t.Errorf("Expected frequency 2, got %d", pattern.Frequency)
+		}
+	})
+}
+
+// TestDefaultParams tests that DefaultParams returns correct defaults.
+func TestDefaultParams(t *testing.T) {
+	params := DefaultParams()
+
+	if params.MinFrequency != 3 {
+		t.Errorf("Expected MinFrequency 3, got %d", params.MinFrequency)
+	}
+
+	if params.MinConfidence != 0.3 {
+		t.Errorf("Expected MinConfidence 0.3, got %f", params.MinConfidence)
+	}
+
+	if params.MaxExamples != 5 {
+		t.Errorf("Expected MaxExamples 5, got %d", params.MaxExamples)
+	}
+
+	if !params.IncludeDescriptions {
+		t.Error("Expected IncludeDescriptions true")
+	}
+
+	if params.VerboseNames {
+		t.Error("Expected VerboseNames false")
 	}
 }

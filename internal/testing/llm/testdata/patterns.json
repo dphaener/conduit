@@ -1,0 +1,83 @@
+[
+  {
+    "id": "pattern-auth-001",
+    "name": "authenticated_handler",
+    "category": "authentication",
+    "description": "Handler with authentication middleware for protected operations",
+    "template": "@on <operation>: [auth]",
+    "examples": [
+      {
+        "resource": "Post",
+        "file_path": "/test/fixtures/post.cdt",
+        "line_number": 10,
+        "code": "@on create: [auth]"
+      },
+      {
+        "resource": "Comment",
+        "file_path": "/test/fixtures/comment.cdt",
+        "line_number": 8,
+        "code": "@on create: [auth]"
+      },
+      {
+        "resource": "Article",
+        "file_path": "/test/fixtures/article.cdt",
+        "line_number": 12,
+        "code": "@on create: [auth]"
+      }
+    ],
+    "frequency": 6,
+    "confidence": 0.6
+  },
+  {
+    "id": "pattern-cache-001",
+    "name": "cached_handler",
+    "category": "caching",
+    "description": "Handler with cache middleware for read-heavy operations",
+    "template": "@on <operation>: [cache(300)]",
+    "examples": [
+      {
+        "resource": "Article",
+        "file_path": "/test/fixtures/article.cdt",
+        "line_number": 15,
+        "code": "@on list: [cache(300)]"
+      },
+      {
+        "resource": "Article",
+        "file_path": "/test/fixtures/article.cdt",
+        "line_number": 18,
+        "code": "@on show: [cache(300)]"
+      },
+      {
+        "resource": "Category",
+        "file_path": "/test/fixtures/category.cdt",
+        "line_number": 10,
+        "code": "@on list: [cache(300)]"
+      }
+    ],
+    "frequency": 4,
+    "confidence": 0.4
+  },
+  {
+    "id": "pattern-ratelimit-001",
+    "name": "rate_limited_handler",
+    "category": "rate_limiting",
+    "description": "Handler with rate limiting for abuse prevention",
+    "template": "@on <operation>: [rate_limit(<limit>/<period>)]",
+    "examples": [
+      {
+        "resource": "User",
+        "file_path": "/test/fixtures/user.cdt",
+        "line_number": 12,
+        "code": "@on create: [rate_limit(10/hour)]"
+      },
+      {
+        "resource": "User",
+        "file_path": "/test/fixtures/user.cdt",
+        "line_number": 15,
+        "code": "@on login: [rate_limit(5/minute)]"
+      }
+    ],
+    "frequency": 2,
+    "confidence": 0.2
+  }
+]

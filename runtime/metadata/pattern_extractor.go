@@ -8,20 +8,59 @@ import (
 	"github.com/google/uuid"
 )
 
+// PatternExtractionParams controls how patterns are extracted and what quality bar they must meet.
+type PatternExtractionParams struct {
+	// MinFrequency is minimum occurrences for a pattern (default: 3)
+	MinFrequency int
+
+	// MinConfidence is minimum confidence score 0.0-1.0 (default: 0.3)
+	MinConfidence float64
+
+	// MaxExamples limits examples per pattern (default: 5)
+	MaxExamples int
+
+	// IncludeDescriptions adds detailed descriptions (default: true)
+	IncludeDescriptions bool
+
+	// VerboseNames uses more descriptive pattern names (default: false)
+	VerboseNames bool
+}
+
+// DefaultParams returns the default extraction parameters.
+func DefaultParams() PatternExtractionParams {
+	return PatternExtractionParams{
+		MinFrequency:        3,
+		MinConfidence:       0.3,
+		MaxExamples:         5,
+		IncludeDescriptions: true,
+		VerboseNames:        false,
+	}
+}
+
 // PatternExtractor extracts common patterns from resource metadata.
 // It identifies frequently occurring middleware chains, hook patterns,
 // and other usage patterns to enable LLM learning and code generation.
 type PatternExtractor struct {
-	minFrequency int // Minimum occurrences for a pattern to be considered valid
+	params PatternExtractionParams
 }
 
 // NewPatternExtractor creates a new pattern extractor with default settings.
 // The default minimum frequency is 3, meaning a pattern must appear at least
 // 3 times before it is extracted.
 func NewPatternExtractor() *PatternExtractor {
+	return NewPatternExtractorWithParams(DefaultParams())
+}
+
+// NewPatternExtractorWithParams creates a pattern extractor with custom parameters.
+func NewPatternExtractorWithParams(params PatternExtractionParams) *PatternExtractor {
 	return &PatternExtractor{
-		minFrequency: 3,
+		params: params,
 	}
+}
+
+// GetParams returns the current extraction parameters.
+func (pe *PatternExtractor) GetParams() PatternExtractionParams {
+	return pe.params
 }
 
 // ExtractMiddlewarePatterns extracts common middleware patterns from resource metadata.
@@ -61,13 +100,16 @@ func (pe *PatternExtractor) ExtractMiddlewarePatterns(resources []ResourceMetada
 		}
 	}
 
-	// Step 2: Filter by frequency
+	// Step 2: Filter by frequency and confidence
 	patterns := []PatternMetadata{}
 
 	for _, chain := range chains {
-		if len(chain.usages) >= pe.minFrequency {
+		if len(chain.usages) >= pe.params.MinFrequency {
 			pattern := pe.generateMiddlewarePattern(chain)
-			patterns = append(patterns, pattern)
+			// Filter by minimum confidence
+			if pattern.Confidence >= pe.params.MinConfidence {
+				patterns = append(patterns, pattern)
+			}
 		}
 	}
 
@@ -83,14 +125,19 @@ func (pe *PatternExtractor) ExtractMiddlewarePatterns(resources []ResourceMetada
 // It generates a descriptive name, template, and examples for the pattern.
 func (pe *PatternExtractor) generateMiddlewarePattern(chain *middlewareChain) PatternMetadata {
 	// Generate pattern name
-	name := pe.generatePatternName(chain.middleware)
+	name := pe.generatePatternName(chain.middleware, chain.usages)
 
 	// Generate template
 	template := fmt.Sprintf("@on <operation>: [%s]", strings.Join(chain.middleware, ", "))
 
-	// Generate examples
-	examples := make([]PatternExample, 0, len(chain.usages))
-	for _, usage := range chain.usages {
+	// Generate examples (limit to MaxExamples)
+	maxExamples := pe.params.MaxExamples
+	if maxExamples <= 0 || maxExamples > len(chain.usages) {
+		maxExamples = len(chain.usages)
+	}
+	examples := make([]PatternExample, 0, maxExamples)
+	for i := 0; i < maxExamples; i++ {
+		usage := chain.usages[i]
 		examples = append(examples, PatternExample{
 			Resource:   usage.resource,
 			FilePath:   usage.filePath,
@@ -102,11 +149,17 @@ func (pe *PatternExtractor) generateMiddlewarePattern(chain *middlewareChain) Pa
 	// Infer category
 	category := pe.inferCategory(chain.middleware)
 
+	// Generate description (if enabled)
+	description := ""
+	if pe.params.IncludeDescriptions {
+		description = fmt.Sprintf("Handler with %s middleware", strings.Join(chain.middleware, " + "))
+	}
+
 	return PatternMetadata{
 		ID:          uuid.New().String(),
 		Name:        name,
 		Category:    category,
-		Description: fmt.Sprintf("Handler with %s middleware", strings.Join(chain.middleware, " + ")),
+		Description: description,
 		Template:    template,
 		Examples:    examples,
 		Frequency:   len(chain.usages),
@@ -118,16 +171,27 @@ func (pe *PatternExtractor) generateMiddlewarePattern(chain *middlewareChain) Pa
 // It extracts base names from middleware (ignoring parameters) and converts
 // them to adjectives, then appends "handler".
 //
-// Examples:
+// When VerboseNames is enabled, adds operation context and parameter details.
+//
+// Examples (VerboseNames=false):
 //   - ["auth"] → "authenticated_handler"
 //   - ["cache(300)"] → "cached_handler"
 //   - ["auth", "rate_limit(5/hour)"] → "authenticated_rate_limited_handler"
-func (pe *PatternExtractor) generatePatternName(middleware []string) string {
+//
+// Examples (VerboseNames=true):
+//   - ["auth"] for create → "authenticated_handler_for_create"
+//   - ["cache(300)"] for list → "cached_handler_with_300_for_list"
+func (pe *PatternExtractor) generatePatternName(middleware []string, usages []patternUsage) string {
 	parts := []string{}
+	paramsParts := []string{}
 
 	for _, m := range middleware {
-		// Extract base name (ignore parameters)
+		// Extract base name and parameters
 		baseName := strings.Split(m, "(")[0]
+		params := ""
+		if idx := strings.Index(m, "("); idx != -1 {
+			params = strings.TrimSuffix(m[idx+1:], ")")
+		}
 
 		switch {
 		case strings.Contains(baseName, "auth"):
@@ -144,9 +208,45 @@ func (pe *PatternExtractor) generatePatternName(middleware []string) string {
 			// Use the base name as-is for unknown middleware
 			parts = append(parts, baseName)
 		}
+
+		// Collect parameter details if VerboseNames is enabled and params exist
+		if pe.params.VerboseNames && params != "" {
+			// Simplify params for name (e.g., "300" from "cache(300)")
+			cleanParams := strings.ReplaceAll(params, "/", "_per_")
+			cleanParams = strings.ReplaceAll(cleanParams, " ", "_")
+			paramsParts = append(paramsParts, cleanParams)
+		}
 	}
 
 	parts = append(parts, "handler")
+
+	// Add all parameter details at the end if any exist
+	if len(paramsParts) > 0 {
+		parts = append(parts, "with_"+strings.Join(paramsParts, "_"))
+	}
+
+	// Add operation context if VerboseNames is enabled
+	if pe.params.VerboseNames && len(usages) > 0 {
+		// Find most common operation
+		operationCounts := make(map[string]int)
+		for _, usage := range usages {
+			operationCounts[usage.operation]++
+		}
+
+		maxCount := 0
+		commonOperation := ""
+		for op, count := range operationCounts {
+			if count > maxCount {
+				maxCount = count
+				commonOperation = op
+			}
+		}
+
+		if commonOperation != "" {
+			parts = append(parts, "for_"+commonOperation)
+		}
+	}
+
 	return strings.Join(parts, "_")
 }
 
