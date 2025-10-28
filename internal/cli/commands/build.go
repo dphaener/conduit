@@ -39,13 +39,21 @@ The build process:
   2. Parsing - generate AST
   3. Type checking - verify type safety
   4. Code generation - produce Go source
-  5. Go compilation - build native binary
-
-Examples:
+  5. Go compilation - build native binary`,
+		Example: `  # Build with default settings
   conduit build
+
+  # Build with verbose output to see each compilation step
   conduit build --verbose
+
+  # Build and output errors in JSON format (useful for tooling)
   conduit build --json
-  conduit build --output dist/myapp`,
+
+  # Build to a custom output location
+  conduit build --output dist/myapp
+
+  # Build with verbose output and custom location
+  conduit build -v -o bin/production`,
 		RunE: runBuild,
 	}
 

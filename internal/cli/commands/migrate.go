@@ -80,13 +80,21 @@ func NewMigrateCommand() *cobra.Command {
 Migrations are stored in the migrations/ directory as SQL files.
 Each migration should have an up and down file:
   001_create_users.up.sql
-  001_create_users.down.sql
+  001_create_users.down.sql`,
+		Example: `  # Apply all pending migrations
+  conduit migrate up
 
-Available subcommands:
-  up       - Apply all pending migrations
-  down     - Rollback the last migration
-  status   - Show migration status
-  rollback - Rollback to a specific version`,
+  # Apply migrations with detailed error output
+  conduit migrate up --verbose
+
+  # Show current migration status
+  conduit migrate status
+
+  # Rollback the last migration
+  conduit migrate down
+
+  # Rollback to a specific version
+  conduit migrate rollback 003`,
 	}
 
 	cmd.AddCommand(newMigrateUpCommand())

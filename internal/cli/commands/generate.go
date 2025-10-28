@@ -23,12 +23,18 @@ func NewGenerateCommand() *cobra.Command {
 Available generators:
   resource   - Generate a new resource definition
   controller - Generate a controller (stub)
-  migration  - Generate a database migration
-
-Examples:
+  migration  - Generate a database migration`,
+		Example: `  # Generate a new resource
   conduit generate resource User
+
+  # Generate a resource with interactive prompts
+  conduit generate resource Post --interactive
+
+  # Generate a database migration
   conduit generate migration create_users
-  conduit g resource Post`,
+
+  # Use the short alias
+  conduit g resource Comment`,
 	}
 
 	cmd.AddCommand(newGenerateResourceCommand())

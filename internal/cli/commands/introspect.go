@@ -11,6 +11,7 @@ import (
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 
+	"github.com/conduit-lang/conduit/internal/cli/ui"
 	"github.com/conduit-lang/conduit/runtime/metadata"
 )
 
@@ -950,122 +951,30 @@ func handleResourceNotFound(name string, writer io.Writer) error {
 		return fmt.Errorf("registry not initialized - run 'conduit build' first to generate metadata")
 	}
 
-	// Find similar resource names
-	suggestions := findSimilarResourceNames(name, resources)
-
-	red := color.New(color.FgRed, color.Bold)
-	yellow := color.New(color.FgYellow)
-
-	red.Fprintf(writer, "Error: Resource '%s' not found\n\n", name)
-
-	if len(suggestions) > 0 {
-		yellow.Fprintln(writer, "Did you mean:")
-		for _, suggestion := range suggestions {
-			fmt.Fprintf(writer, "  - %s\n", suggestion)
-		}
-		fmt.Fprintln(writer)
+	// Extract resource names for fuzzy matching
+	resourceNames := make([]string, len(resources))
+	for i, res := range resources {
+		resourceNames[i] = res.Name
 	}
 
-	fmt.Fprintln(writer, "Available resources:")
-	for _, res := range resources {
-		fmt.Fprintf(writer, "  - %s\n", res.Name)
+	// Find similar resource names using the new fuzzy search utility
+	suggestions := ui.FindSimilar(name, resourceNames, nil)
+
+	// Use the new standardized error formatter
+	errorMsg := ui.ResourceNotFoundError(name, suggestions, noColor)
+	fmt.Fprint(writer, errorMsg)
+
+	// Also show available resources if no suggestions found
+	if len(suggestions) == 0 {
+		fmt.Fprintln(writer, "\nAvailable resources:")
+		for _, res := range resources {
+			fmt.Fprintf(writer, "  - %s\n", res.Name)
+		}
 	}
 
 	return fmt.Errorf("resource not found: %s", name)
 }
 
-// findSimilarResourceNames finds resource names similar to the given name
-// using Levenshtein distance algorithm
-func findSimilarResourceNames(name string, resources []metadata.ResourceMetadata) []string {
-	const maxDistance = 3 // Maximum edit distance to consider
-	const maxSuggestions = 3
-
-	type suggestion struct {
-		name     string
-		distance int
-	}
-
-	var suggestions []suggestion
-
-	for _, res := range resources {
-		dist := levenshteinDistance(strings.ToLower(name), strings.ToLower(res.Name))
-		if dist <= maxDistance {
-			suggestions = append(suggestions, suggestion{
-				name:     res.Name,
-				distance: dist,
-			})
-		}
-	}
-
-	// Sort by distance (closest first)
-	sort.Slice(suggestions, func(i, j int) bool {
-		return suggestions[i].distance < suggestions[j].distance
-	})
-
-	// Return top suggestions
-	result := make([]string, 0, maxSuggestions)
-	for i := 0; i < len(suggestions) && i < maxSuggestions; i++ {
-		result = append(result, suggestions[i].name)
-	}
-
-	return result
-}
-
-// levenshteinDistance calculates the Levenshtein distance between two strings
-func levenshteinDistance(s1, s2 string) int {
-	if len(s1) == 0 {
-		return len(s2)
-	}
-	if len(s2) == 0 {
-		return len(s1)
-	}
-
-	// Create matrix
-	matrix := make([][]int, len(s1)+1)
-	for i := range matrix {
-		matrix[i] = make([]int, len(s2)+1)
-	}
-
-	// Initialize first column and row
-	for i := 0; i <= len(s1); i++ {
-		matrix[i][0] = i
-	}
-	for j := 0; j <= len(s2); j++ {
-		matrix[0][j] = j
-	}
-
-	// Fill matrix
-	for i := 1; i <= len(s1); i++ {
-		for j := 1; j <= len(s2); j++ {
-			cost := 1
-			if s1[i-1] == s2[j-1] {
-				cost = 0
-			}
-
-			matrix[i][j] = min(
-				matrix[i-1][j]+1,      // deletion
-				matrix[i][j-1]+1,      // insertion
-				matrix[i-1][j-1]+cost, // substitution
-			)
-		}
-	}
-
-	return matrix[len(s1)][len(s2)]
-}
-
-// min returns the minimum of three integers
-func min(a, b, c int) int {
-	if a < b {
-		if a < c {
-			return a
-		}
-		return c
-	}
-	if b < c {
-		return b
-	}
-	return c
-}
 
 // formatResourceAsTable formats a single resource as a human-readable table
 func formatResourceAsTable(resource *metadata.ResourceMetadata, writer io.Writer, verbose bool) error {
