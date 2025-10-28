@@ -13,6 +13,9 @@ var (
 	GitCommit = "unknown"
 	BuildDate = "unknown"
 	GoVersion = "unknown"
+
+	// Global flags
+	globalNoColor bool
 )
 
 // NewRootCommand creates the root command
@@ -33,7 +36,16 @@ Features:
   • Sub-second compilation`),
 		SilenceUsage:  true,
 		SilenceErrors: true,
+		PersistentPreRun: func(cmd *cobra.Command, args []string) {
+			// Disable color output globally if requested
+			if globalNoColor {
+				color.NoColor = true
+			}
+		},
 	}
+
+	// Add global flags
+	rootCmd.PersistentFlags().BoolVar(&globalNoColor, "no-color", false, "Disable colored output")
 
 	// Add subcommands
 	rootCmd.AddCommand(NewVersionCommand())
@@ -95,4 +107,9 @@ func Execute() error {
 		return err
 	}
 	return nil
+}
+
+// IsNoColor returns true if color output is disabled
+func IsNoColor() bool {
+	return globalNoColor || color.NoColor
 }
