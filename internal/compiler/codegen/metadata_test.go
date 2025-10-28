@@ -111,7 +111,7 @@ func TestGenerator_GenerateProgram_IncludesMetadata(t *testing.T) {
 	}
 
 	gen := NewGenerator()
-	files, err := gen.GenerateProgram(prog)
+	files, err := gen.GenerateProgram(prog, "test-app", "")
 
 	if err != nil {
 		t.Fatalf("GenerateProgram() error = %v", err)

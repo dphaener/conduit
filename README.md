@@ -4,6 +4,30 @@
 
 Conduit is a programming language designed from the ground up for AI-assisted development. It provides explicit, unambiguous syntax that makes it easy for both LLMs and humans to build production-ready web applications.
 
+## ⚠️ Project Status
+
+**Alpha - Actively Under Development**
+
+Conduit is in active development. The compiler is functional and can generate working Go applications, but many features are incomplete or missing. **Not recommended for production use.**
+
+What works:
+- ✅ Basic compiler (lexer, parser, type checker, code generator)
+- ✅ Resource definitions with fields and types
+- ✅ REST API generation with CRUD endpoints
+- ✅ Lifecycle hooks (`@before create`, etc.)
+- ✅ Built-in stdlib functions (String.slugify, etc.)
+- ✅ UUID and basic type support
+- ✅ Database migrations (PostgreSQL)
+
+What's missing:
+- ❌ Full ORM implementation (relationships, query builder)
+- ❌ LSP/IDE integration
+- ❌ Hot reload / watch mode
+- ❌ Comprehensive test coverage
+- ❌ Documentation
+- ❌ Error messages need improvement
+- ❌ Many stdlib functions
+
 ## Key Features
 
 - 🤖 **LLM-Optimized Syntax** - Explicit nullability, namespaced stdlib, zero ambiguity
@@ -11,7 +35,70 @@ Conduit is a programming language designed from the ground up for AI-assisted de
 - 🗄️ **Built-in ORM** - Type-safe queries, relationship management, automatic migrations
 - 🌐 **REST API Generation** - Automatic CRUD endpoints from resource definitions
 - 🔍 **Runtime Introspection** - Query schema, discover patterns, generate documentation
-- 🛠️ **Developer Tooling** - LSP, debugger, hot reload, code formatter
+- 🛠️ **Developer Tooling** - LSP, debugger, hot reload, code formatter *(planned)*
+
+## Quick Start
+
+### Installation
+
+**Prerequisites:**
+- Go 1.23 or later
+- PostgreSQL 15+ (for database features)
+
+**Install from source:**
+
+```bash
+git clone https://github.com/conduit-lang/conduit.git
+cd conduit
+go build -o conduit ./cmd/conduit
+sudo mv conduit /usr/local/bin/
+```
+
+**Set up environment:**
+
+```bash
+# Required for development builds
+export CONDUIT_ROOT=/path/to/conduit
+```
+
+### Create Your First Project
+
+```bash
+# Create a new directory
+mkdir my-blog
+cd my-blog
+
+# Create app directory and a resource file
+mkdir -p app/resources
+cat > app/resources/post.cdt << 'EOF'
+/// Blog post with title and content
+resource Post {
+  id: uuid! @primary @auto
+  title: string! @min(5) @max(200)
+  slug: string! @unique
+  content: text! @min(100)
+  published: bool! @default(false)
+  created_at: timestamp! @auto
+  updated_at: timestamp! @auto_update
+
+  @before create {
+    self.slug = String.slugify(self.title)
+  }
+}
+EOF
+
+# Build the application
+conduit build
+
+# Run it!
+./build/app
+```
+
+This generates:
+- REST API endpoints (`GET /posts`, `POST /posts`, etc.)
+- Database schema and migrations
+- Type-safe validation
+- Lifecycle hooks
 
 ## Example
 
@@ -34,6 +121,13 @@ resource Post {
   @before create {
     self.slug = String.slugify(self.title)
   }
+
+  @constraint published_requires_content {
+    on: [create, update]
+    when: self.status == "published"
+    condition: String.length(self.content) >= 500
+    error: "Published posts must have at least 500 characters"
+  }
 }
 ```
 
@@ -44,31 +138,10 @@ This automatically generates:
 - Validation and constraints
 - Lifecycle hook execution
 
-## Project Status
-
-**Current Stage:** Design & Planning
-
-This repository contains the complete language specification and implementation guides. Active development of the compiler and runtime will begin soon.
-
 ## Documentation
 
-### Getting Started
-- 📚 **[GETTING-STARTED.md](GETTING-STARTED.md)** - Quick start guide for developers
-
-### Language Reference
+- 📚 **[GETTING-STARTED.md](GETTING-STARTED.md)** - Detailed getting started guide
 - 📖 **[LANGUAGE-SPEC.md](LANGUAGE-SPEC.md)** - Complete language specification
-- 🏗️ **[ARCHITECTURE.md](ARCHITECTURE.md)** - System architecture overview
-
-### Implementation Guides
-- 🔧 **[IMPLEMENTATION-COMPILER.md](IMPLEMENTATION-COMPILER.md)** - Compiler (lexer, parser, type checker, code generator)
-- ⚙️ **[IMPLEMENTATION-RUNTIME.md](IMPLEMENTATION-RUNTIME.md)** - Runtime system (introspection, lifecycle, validation)
-- 🗃️ **[IMPLEMENTATION-ORM.md](IMPLEMENTATION-ORM.md)** - ORM (query builder, relationships, migrations)
-- 🌐 **[IMPLEMENTATION-WEB.md](IMPLEMENTATION-WEB.md)** - Web framework (routing, handlers, middleware)
-- 🛠️ **[IMPLEMENTATION-TOOLING.md](IMPLEMENTATION-TOOLING.md)** - Developer tools (CLI, LSP, debugger, formatter)
-
-### Pattern Validation
-- 🧪 **[docs/PATTERN-VALIDATION-GUIDE.md](docs/PATTERN-VALIDATION-GUIDE.md)** - LLM pattern validation system
-- ✅ **[docs/PATTERN-QUALITY-CHECKLIST.md](docs/PATTERN-QUALITY-CHECKLIST.md)** - Pattern quality review checklist
 
 ## Design Philosophy
 
@@ -101,10 +174,9 @@ LLMs don't experience tedium, they experience ambiguity. Verbose in service of c
 
 ### For Teams
 - **Consistent**: Conventions enforced at compile-time
-- **Discoverable**: Introspection API reveals patterns
+- **Discoverable**: Introspection API reveals patterns *(planned)*
 - **Maintainable**: Explicit code is easier to understand
 - **Scalable**: Go's performance handles production workloads
-- **Validated**: Built-in LLM pattern validation ensures AI-friendliness
 
 ## Compilation Target
 
@@ -115,62 +187,37 @@ Conduit compiles to Go source code, which is then compiled to native binaries us
 - **Native performance** - 10,000+ req/s per server
 - **Mature ecosystem** - Leverage existing Go libraries
 
-## Timeline
-
-### Phase 1: Foundation (Months 1-3)
-- Compiler implementation (lexer, parser, type checker)
-- Go code generation
-- Basic ORM with PostgreSQL
-- CLI tool
-
-### Phase 2: Web Framework (Months 4-6)
-- REST API generation
-- Middleware system
-- Request/response handling
-- Validation framework
-
-### Phase 3: Tooling (Months 7-9)
-- Language Server Protocol (LSP)
-- Watch mode and hot reload
-- Debug Adapter Protocol (DAP)
-- Code formatter
-
-### Phase 4: Introspection (Months 10-12)
-- Runtime introspection API
-- Pattern extraction
-- Documentation generation
-- LLM integration examples
-
 ## Contributing
 
-We welcome contributions! This project is in the planning phase. Once implementation begins, we'll need help with:
+We welcome contributions! Areas where help is needed:
 
-- Compiler development (Go)
-- Runtime implementation (Go)
-- Standard library functions
-- Documentation and examples
-- Testing and validation
-- IDE integrations
+- **Compiler**: Bug fixes, error messages, type checking improvements
+- **Runtime**: Stdlib functions, validation, lifecycle management
+- **ORM**: Relationship support, query builder, migrations
+- **Documentation**: Examples, tutorials, API docs
+- **Testing**: Unit tests, integration tests, edge cases
+- **Tooling**: LSP, formatter, debugger integration
+
+Please open an issue to discuss before starting major work.
 
 ## Technology Stack
 
 - **Source Language**: Conduit (`.cdt` files)
 - **Target Language**: Go 1.23+
 - **Database**: PostgreSQL 15+ (primary), MySQL/SQLite (planned)
-- **Compiler**: Go (self-hosted)
+- **Compiler**: Go
 - **Runtime**: Go standard library + custom runtime
 - **Tooling**: Cobra (CLI), fsnotify (file watching), Delve (debugging)
 
 ## License
 
-[To be determined - likely MIT or Apache 2.0]
+MIT License - see [LICENSE](LICENSE) file for details.
 
 ## Community
 
 - **GitHub**: https://github.com/conduit-lang/conduit
-- **Discord**: [Coming soon]
-- **Forum**: [Coming soon]
-- **Documentation**: [Coming soon]
+- **Issues**: https://github.com/conduit-lang/conduit/issues
+- **Discussions**: https://github.com/conduit-lang/conduit/discussions
 
 ## Acknowledgments
 
@@ -178,13 +225,11 @@ Conduit is inspired by:
 - **Rails** - Convention over configuration
 - **Prisma** - Type-safe database access
 - **TypeScript** - Explicit type system
-- **Elixir** - Explicit pipe operator and pattern matching
+- **Elixir** - Explicit patterns and functional approach
 - **Go** - Simplicity and fast compilation
 
 Built with the belief that programming languages should serve both humans and AI.
 
 ---
 
-**Status**: Design Complete, Implementation Starting Soon
-
-**Questions?** Open an issue or join our Discord!
+**Questions?** Open an issue or start a discussion!

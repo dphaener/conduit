@@ -164,8 +164,9 @@ func (g *Generator) generateStdlibCall(call *ast.CallExpr) string {
 	// String namespace - string manipulation functions
 	// ============================================================================
 	case "String.slugify":
-		// Custom implementation needed for URL-safe slugs
-		return fmt.Sprintf("stdlib.StringSlugify(%s)", argsStr)
+		// Use runtime stdlib implementation
+		g.imports["github.com/conduit-lang/conduit/pkg/runtime"] = true
+		return fmt.Sprintf("runtime.StringSlugify(%s)", argsStr)
 	case "String.capitalize":
 		// Custom implementation - capitalize first letter
 		return fmt.Sprintf("stdlib.StringCapitalize(%s)", argsStr)

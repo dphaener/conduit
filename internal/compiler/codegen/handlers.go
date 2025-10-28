@@ -8,7 +8,7 @@ import (
 )
 
 // GenerateHandlers generates HTTP handlers for all resources
-func (g *Generator) GenerateHandlers(resources []*ast.ResourceNode) (string, error) {
+func (g *Generator) GenerateHandlers(resources []*ast.ResourceNode, moduleName string) (string, error) {
 	g.reset()
 
 	// Package declaration
@@ -16,13 +16,20 @@ func (g *Generator) GenerateHandlers(resources []*ast.ResourceNode) (string, err
 	g.writeLine("")
 
 	// Imports
-	g.imports["context"] = true
 	g.imports["database/sql"] = true
 	g.imports["encoding/json"] = true
 	g.imports["fmt"] = true
 	g.imports["net/http"] = true
 	g.imports["strconv"] = true
 	g.imports["github.com/go-chi/chi/v5"] = true
+	g.imports[moduleName+"/models"] = true // Import models package
+
+	// Pre-scan resources for additional imports (like uuid for ID types)
+	for _, resource := range resources {
+		if g.getIDType(resource) == "uuid" {
+			g.imports["github.com/google/uuid"] = true
+		}
+	}
 
 	g.writeImports()
 	g.writeLine("")
@@ -36,6 +43,47 @@ func (g *Generator) GenerateHandlers(resources []*ast.ResourceNode) (string, err
 	}
 
 	return g.buf.String(), nil
+}
+
+// get IDType returns the type of the resource's ID field
+func (g *Generator) getIDType(resource *ast.ResourceNode) string {
+	for _, field := range resource.Fields {
+		if field.Name == "id" {
+			return field.Type.Name
+		}
+	}
+	// Default to int64 if no explicit ID field
+	return "int"
+}
+
+// generateIDParsingCode generates code to parse ID from URL based on type
+func (g *Generator) generateIDParsingCode(resource *ast.ResourceNode) {
+	idType := g.getIDType(resource)
+
+	g.writeLine("// Parse ID from URL")
+	g.writeLine("idStr := chi.URLParam(r, \"id\")")
+
+	switch idType {
+	case "uuid":
+		// UUID needs the uuid package imported
+		g.imports["github.com/google/uuid"] = true
+		g.writeLine("id, err := uuid.Parse(idStr)")
+		g.writeLine("if err != nil {")
+		g.indent++
+		g.writeLine("http.Error(w, \"Invalid ID\", http.StatusBadRequest)")
+		g.writeLine("return")
+		g.indent--
+		g.writeLine("}")
+	default: // int, int64, etc.
+		g.writeLine("id, err := strconv.ParseInt(idStr, 10, 64)")
+		g.writeLine("if err != nil {")
+		g.indent++
+		g.writeLine("http.Error(w, \"Invalid ID\", http.StatusBadRequest)")
+		g.writeLine("return")
+		g.indent--
+		g.writeLine("}")
+	}
+	g.writeLine("")
 }
 
 // generateResourceHandlers generates all CRUD handlers for a resource
@@ -160,16 +208,7 @@ func (g *Generator) generateGetHandler(resource *ast.ResourceNode) {
 	g.writeLine("")
 
 	// Parse ID from URL
-	g.writeLine("// Parse ID from URL")
-	g.writeLine("idStr := chi.URLParam(r, \"id\")")
-	g.writeLine("id, err := strconv.ParseInt(idStr, 10, 64)")
-	g.writeLine("if err != nil {")
-	g.indent++
-	g.writeLine("http.Error(w, \"Invalid ID\", http.StatusBadRequest)")
-	g.writeLine("return")
-	g.indent--
-	g.writeLine("}")
-	g.writeLine("")
+	g.generateIDParsingCode(resource)
 
 	// Call FindByID function
 	g.writeLine("result, err := models.Find%sByID(ctx, db, id)", resource.Name)
@@ -272,16 +311,7 @@ func (g *Generator) generateUpdateHandler(resource *ast.ResourceNode) {
 	g.writeLine("")
 
 	// Parse ID from URL
-	g.writeLine("// Parse ID from URL")
-	g.writeLine("idStr := chi.URLParam(r, \"id\")")
-	g.writeLine("id, err := strconv.ParseInt(idStr, 10, 64)")
-	g.writeLine("if err != nil {")
-	g.indent++
-	g.writeLine("http.Error(w, \"Invalid ID\", http.StatusBadRequest)")
-	g.writeLine("return")
-	g.indent--
-	g.writeLine("}")
-	g.writeLine("")
+	g.generateIDParsingCode(resource)
 
 	// Decode JSON request body
 	g.writeLine("// Decode request body")
@@ -341,16 +371,7 @@ func (g *Generator) generateDeleteHandler(resource *ast.ResourceNode) {
 	g.writeLine("")
 
 	// Parse ID from URL
-	g.writeLine("// Parse ID from URL")
-	g.writeLine("idStr := chi.URLParam(r, \"id\")")
-	g.writeLine("id, err := strconv.ParseInt(idStr, 10, 64)")
-	g.writeLine("if err != nil {")
-	g.indent++
-	g.writeLine("http.Error(w, \"Invalid ID\", http.StatusBadRequest)")
-	g.writeLine("return")
-	g.indent--
-	g.writeLine("}")
-	g.writeLine("")
+	g.generateIDParsingCode(resource)
 
 	// Fetch existing resource
 	g.writeLine("// Fetch existing %s", resourceLower)

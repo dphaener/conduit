@@ -68,11 +68,23 @@ func (g *Generator) generateCreate(resource *ast.ResourceNode) {
 	g.writeLine("}")
 }
 
+// getIDGoType returns the Go type for the ID field
+func (g *Generator) getIDGoType(resource *ast.ResourceNode) string {
+	for _, field := range resource.Fields {
+		if field.Name == "id" {
+			return g.toGoType(field)
+		}
+	}
+	// Default ID type if not explicitly defined
+	return "int64"
+}
+
 // generateFindByID generates the FindByID() function for a resource
 func (g *Generator) generateFindByID(resource *ast.ResourceNode) {
+	idType := g.getIDGoType(resource)
 	g.writeLine("// FindByID retrieves a %s by its ID", resource.Name)
-	g.writeLine("func Find%sByID(ctx context.Context, db *sql.DB, id int64) (*%s, error) {",
-		resource.Name, resource.Name)
+	g.writeLine("func Find%sByID(ctx context.Context, db *sql.DB, id %s) (*%s, error) {",
+		resource.Name, idType, resource.Name)
 	g.indent++
 
 	// Build SELECT query

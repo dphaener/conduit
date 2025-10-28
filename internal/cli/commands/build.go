@@ -225,8 +225,78 @@ func runBuild(cmd *cobra.Command, args []string) error {
 		infoColor.Println("Generating Go code...")
 	}
 
+	// Derive module name from current directory
+	cwd, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("failed to get current directory: %w", err)
+	}
+	moduleName := filepath.Base(cwd)
+
+	// Find conduit source path
+	// Priority: 1. CONDUIT_ROOT env var, 2. Traverse from executable, 3. Error
+	conduitPath := os.Getenv("CONDUIT_ROOT")
+
+	if conduitPath == "" {
+		// Try to find from executable location
+		conduitExec, err := os.Executable()
+		if err != nil {
+			return fmt.Errorf("failed to get executable path: %w", err)
+		}
+
+		// Resolve symlinks (in case conduit is a symlink)
+		if resolvedExec, err := filepath.EvalSymlinks(conduitExec); err == nil {
+			conduitExec = resolvedExec
+		}
+
+		conduitDir := filepath.Dir(conduitExec)
+
+		// Try to find conduit source root by looking for go.mod + pkg/runtime/stdlib.go
+		checkDir := conduitDir
+		for i := 0; i < 10; i++ { // Check up to 10 levels up
+			goModPath := filepath.Join(checkDir, "go.mod")
+			stdlibPath := filepath.Join(checkDir, "pkg", "runtime", "stdlib.go")
+
+			if _, err := os.Stat(goModPath); err == nil {
+				if _, err := os.Stat(stdlibPath); err == nil {
+					// Found it! This is the conduit source directory
+					conduitPath, _ = filepath.Abs(checkDir)
+					if buildVerbose {
+						infoColor.Printf("Found conduit source at: %s\n", conduitPath)
+					}
+					break
+				}
+			}
+
+			parent := filepath.Dir(checkDir)
+			if parent == checkDir {
+				break // Reached root
+			}
+			checkDir = parent
+		}
+	} else {
+		if buildVerbose {
+			infoColor.Printf("Using CONDUIT_ROOT: %s\n", conduitPath)
+		}
+	}
+
+	// If we still haven't found it, error out with helpful message
+	if conduitPath == "" {
+		return fmt.Errorf(`could not locate conduit source directory
+
+Please set the CONDUIT_ROOT environment variable to point to your conduit source:
+  export CONDUIT_ROOT=/path/to/conduit
+
+Or run conduit build from the conduit source directory.`)
+	}
+
+	// Verify the path actually contains conduit runtime
+	stdlibCheck := filepath.Join(conduitPath, "pkg", "runtime", "stdlib.go")
+	if _, err := os.Stat(stdlibCheck); err != nil {
+		return fmt.Errorf("CONDUIT_ROOT (%s) does not contain pkg/runtime/stdlib.go - is this the correct path?", conduitPath)
+	}
+
 	gen := codegen.NewGenerator()
-	files, err := gen.GenerateProgram(program)
+	files, err := gen.GenerateProgram(program, moduleName, conduitPath)
 	if err != nil {
 		return fmt.Errorf("code generation failed: %w", err)
 	}
@@ -254,6 +324,20 @@ func runBuild(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	// Download Go dependencies and create go.sum
+	if buildVerbose {
+		infoColor.Println("Downloading dependencies...")
+	}
+
+	tidyCmd := exec.Command("go", "mod", "tidy")
+	tidyCmd.Dir = generatedDir
+	tidyCmd.Stdout = os.Stdout
+	tidyCmd.Stderr = os.Stderr
+
+	if err := tidyCmd.Run(); err != nil {
+		return fmt.Errorf("go mod tidy failed: %w", err)
+	}
+
 	// Build Go binary
 	if buildVerbose {
 		infoColor.Println("Building binary...")
@@ -264,7 +348,15 @@ func runBuild(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to create output directory: %w", err)
 	}
 
-	buildCmd := exec.Command("go", "build", "-o", outputPath, "./"+generatedDir)
+	// Convert output path to absolute path
+	absOutputPath, err := filepath.Abs(outputPath)
+	if err != nil {
+		return fmt.Errorf("failed to get absolute output path: %w", err)
+	}
+
+	// Run go build from the generated directory
+	buildCmd := exec.Command("go", "build", "-o", absOutputPath)
+	buildCmd.Dir = generatedDir
 	buildCmd.Stdout = os.Stdout
 	buildCmd.Stderr = os.Stderr
 

@@ -3,6 +3,9 @@
 *.conduit-cache
 *.meta.json.cache
 
+# Internal design documents (not for public consumption)
+.design/
+
 # Compiled binaries
 *.exe
 *.exe~

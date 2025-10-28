@@ -5,7 +5,7 @@ import (
 )
 
 // GenerateMain generates the main.go entry point
-func (g *Generator) GenerateMain(resources []*ast.ResourceNode) (string, error) {
+func (g *Generator) GenerateMain(resources []*ast.ResourceNode, moduleName string) (string, error) {
 	g.reset()
 
 	// Package declaration
@@ -21,6 +21,7 @@ func (g *Generator) GenerateMain(resources []*ast.ResourceNode) (string, error) 
 	g.imports["github.com/go-chi/chi/v5"] = true
 	g.imports["github.com/go-chi/chi/v5/middleware"] = true
 	g.imports["_ github.com/jackc/pgx/v5/stdlib"] = true // PostgreSQL driver
+	g.imports[moduleName+"/handlers"] = true              // Import handlers package
 
 	g.writeImports()
 	g.writeLine("")

@@ -592,9 +592,16 @@ func (s *System) generateGoCode(compiled []*CompiledFile) (map[string]string, er
 		Resources: allResources,
 	}
 
-	// Generate code
+	// Derive module name from current directory
+	cwd, err := os.Getwd()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get current directory: %w", err)
+	}
+	moduleName := filepath.Base(cwd)
+
+	// Generate code (empty conduitPath for now - will be resolved by go mod tidy)
 	gen := codegen.NewGenerator()
-	files, err := gen.GenerateProgram(program)
+	files, err := gen.GenerateProgram(program, moduleName, "")
 	if err != nil {
 		return nil, err
 	}

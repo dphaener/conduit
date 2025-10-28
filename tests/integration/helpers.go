@@ -115,7 +115,7 @@ func CompileSource(t *testing.T, source string) *CompileResult {
 
 	// Code Generator
 	gen := codegen.NewGenerator()
-	files, err := gen.GenerateProgram(prog)
+	files, err := gen.GenerateProgram(prog, "test-app", "")
 	if err != nil {
 		t.Fatalf("Code generation error: %v", err)
 	}

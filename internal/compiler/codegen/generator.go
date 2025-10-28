@@ -27,8 +27,11 @@ func NewGenerator() *Generator {
 }
 
 // GenerateProgram generates Go code for an entire program
-func (g *Generator) GenerateProgram(prog *ast.Program) (map[string]string, error) {
+func (g *Generator) GenerateProgram(prog *ast.Program, moduleName string, conduitPath string) (map[string]string, error) {
 	files := make(map[string]string)
+
+	// Generate go.mod file
+	files["go.mod"] = g.GenerateGoMod(moduleName, conduitPath)
 
 	// Generate models for each resource (including hooks)
 	for _, resource := range prog.Resources {
@@ -41,14 +44,14 @@ func (g *Generator) GenerateProgram(prog *ast.Program) (map[string]string, error
 	}
 
 	// Generate HTTP handlers
-	handlers, err := g.GenerateHandlers(prog.Resources)
+	handlers, err := g.GenerateHandlers(prog.Resources, moduleName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate handlers: %w", err)
 	}
 	files["handlers/handlers.go"] = handlers
 
 	// Generate main entry point
-	mainCode, err := g.GenerateMain(prog.Resources)
+	mainCode, err := g.GenerateMain(prog.Resources, moduleName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate main: %w", err)
 	}
@@ -78,8 +81,36 @@ func (g *Generator) GenerateProgram(prog *ast.Program) (map[string]string, error
 	return files, nil
 }
 
+// GenerateGoMod generates a go.mod file for the generated Go code
+func (g *Generator) GenerateGoMod(moduleName string, conduitPath string) string {
+	var buf bytes.Buffer
+
+	buf.WriteString(fmt.Sprintf("module %s\n\n", moduleName))
+	buf.WriteString("go 1.23\n\n")
+	buf.WriteString("require (\n")
+	buf.WriteString("\tgithub.com/conduit-lang/conduit v0.0.0-20241028000000-000000000000\n")
+	buf.WriteString("\tgithub.com/google/uuid v1.6.0\n")
+	buf.WriteString("\tgithub.com/go-chi/chi/v5 v5.0.12\n")
+	buf.WriteString("\tgithub.com/jackc/pgx/v5 v5.5.5\n")
+	buf.WriteString(")\n\n")
+
+	// Add replace directive only for local development
+	// When conduitPath is provided, we're in dev mode
+	if conduitPath != "" {
+		buf.WriteString(fmt.Sprintf("// Development: using local conduit source\n"))
+		buf.WriteString(fmt.Sprintf("replace github.com/conduit-lang/conduit => %s\n", conduitPath))
+	}
+
+	return buf.String()
+}
+
 // GenerateResourceWithHooks generates a resource with lifecycle hooks
 func (g *Generator) GenerateResourceWithHooks(resource *ast.ResourceNode) (string, error) {
+	// Pre-scan hooks to collect imports before generating the resource
+	if len(resource.Hooks) > 0 {
+		g.collectHookImports(resource)
+	}
+
 	// First generate the base resource (struct, table name, validate, CRUD)
 	baseCode, err := g.GenerateResource(resource)
 	if err != nil {
@@ -91,15 +122,88 @@ func (g *Generator) GenerateResourceWithHooks(resource *ast.ResourceNode) (strin
 		return baseCode, nil
 	}
 
-	// Append hooks
+	// Generate hooks (imports already collected)
 	hooksCode := g.generateHooks(resource)
 
 	return baseCode + "\n" + hooksCode, nil
 }
 
+// collectHookImports pre-scans hooks to collect all required imports
+func (g *Generator) collectHookImports(resource *ast.ResourceNode) {
+	for _, hook := range resource.Hooks {
+		for _, stmt := range hook.Body {
+			g.collectStmtImports(stmt)
+		}
+	}
+}
+
+// collectStmtImports recursively collects imports from a statement
+func (g *Generator) collectStmtImports(stmt ast.StmtNode) {
+	switch s := stmt.(type) {
+	case *ast.ExprStmt:
+		g.collectExprImports(s.Expr)
+	case *ast.AssignmentStmt:
+		g.collectExprImports(s.Target)
+		g.collectExprImports(s.Value)
+	case *ast.LetStmt:
+		g.collectExprImports(s.Value)
+	case *ast.IfStmt:
+		g.collectExprImports(s.Condition)
+		for _, stmt := range s.ThenBranch {
+			g.collectStmtImports(stmt)
+		}
+		for _, stmt := range s.ElseBranch {
+			g.collectStmtImports(stmt)
+		}
+	case *ast.BlockStmt:
+		for _, stmt := range s.Statements {
+			g.collectStmtImports(stmt)
+		}
+	}
+}
+
+// collectExprImports collects imports from an expression
+func (g *Generator) collectExprImports(expr ast.ExprNode) {
+	if expr == nil {
+		return
+	}
+
+	switch e := expr.(type) {
+	case *ast.CallExpr:
+		if e.Namespace == "String" && e.Function == "slugify" {
+			g.imports["github.com/conduit-lang/conduit/pkg/runtime"] = true
+		}
+		// Collect from arguments
+		for _, arg := range e.Arguments {
+			g.collectExprImports(arg)
+		}
+	case *ast.FieldAccessExpr:
+		g.collectExprImports(e.Object)
+	case *ast.BinaryExpr:
+		g.collectExprImports(e.Left)
+		g.collectExprImports(e.Right)
+	case *ast.UnaryExpr:
+		g.collectExprImports(e.Operand)
+	case *ast.LogicalExpr:
+		g.collectExprImports(e.Left)
+		g.collectExprImports(e.Right)
+	}
+}
+
 // GenerateResource generates Go code for a single resource
 func (g *Generator) GenerateResource(resource *ast.ResourceNode) (string, error) {
+	// Save pre-collected imports (from hooks) before reset
+	preservedImports := make(map[string]bool)
+	for k, v := range g.imports {
+		preservedImports[k] = v
+	}
+
 	g.reset()
+
+	// Restore pre-collected imports
+	for k, v := range preservedImports {
+		g.imports[k] = v
+	}
 
 	// Validate resource name (should be caught by type checker, but defensive)
 	if len(resource.Name) == 0 {
@@ -315,10 +419,34 @@ func (g *Generator) toGoType(field *ast.FieldNode) string {
 
 // toGoFieldName converts a snake_case field name to PascalCase
 func (g *Generator) toGoFieldName(name string) string {
+	// Common initialisms that should be all caps in Go
+	initialisms := map[string]string{
+		"id":   "ID",
+		"url":  "URL",
+		"uri":  "URI",
+		"uuid": "UUID",
+		"api":  "API",
+		"http": "HTTP",
+		"https": "HTTPS",
+		"json": "JSON",
+		"xml":  "XML",
+		"html": "HTML",
+		"css":  "CSS",
+		"sql":  "SQL",
+		"ip":   "IP",
+		"tcp":  "TCP",
+		"udp":  "UDP",
+	}
+
 	parts := strings.Split(name, "_")
 	for i, part := range parts {
 		if len(part) > 0 {
-			parts[i] = strings.ToUpper(part[0:1]) + part[1:]
+			// Check if this part is a known initialism
+			if upper, ok := initialisms[strings.ToLower(part)]; ok {
+				parts[i] = upper
+			} else {
+				parts[i] = strings.ToUpper(part[0:1]) + part[1:]
+			}
 		}
 	}
 	return strings.Join(parts, "")

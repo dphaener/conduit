@@ -77,7 +77,7 @@ func BenchmarkCodeGenerator_50Resources(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		gen := codegen.NewGenerator()
-		_, _ = gen.GenerateProgram(prog)
+		_, _ = gen.GenerateProgram(prog, "test-app", "")
 	}
 }
 
@@ -103,7 +103,7 @@ func BenchmarkFullPipeline_TypicalProject(b *testing.B) {
 
 		// Code Generator
 		gen := codegen.NewGenerator()
-		_, _ = gen.GenerateProgram(prog)
+		_, _ = gen.GenerateProgram(prog, "test-app", "")
 	}
 }
 
@@ -157,7 +157,7 @@ func BenchmarkCodeGenerator_SimpleResource(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		gen := codegen.NewGenerator()
-		_, _ = gen.GenerateProgram(prog)
+		_, _ = gen.GenerateProgram(prog, "test-app", "")
 	}
 }
 
@@ -198,6 +198,6 @@ func BenchmarkFullPipeline_WithRelationships(b *testing.B) {
 		tc := typechecker.NewTypeChecker()
 		_ = tc.CheckProgram(prog)
 		gen := codegen.NewGenerator()
-		_, _ = gen.GenerateProgram(prog)
+		_, _ = gen.GenerateProgram(prog, "test-app", "")
 	}
 }

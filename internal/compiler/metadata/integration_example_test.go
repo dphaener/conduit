@@ -164,7 +164,7 @@ func TestCompleteWorkflow(t *testing.T) {
 
 	// Step 6: Test code generation integration
 	gen := codegen.NewGenerator()
-	files, err := gen.GenerateProgram(prog)
+	files, err := gen.GenerateProgram(prog, "test-app", "")
 	if err != nil {
 		t.Fatalf("GenerateProgram failed: %v", err)
 	}
@@ -321,7 +321,7 @@ func Example_workflow() {
 
 	// Generate code
 	gen := codegen.NewGenerator()
-	files, _ := gen.GenerateProgram(prog)
+	files, _ := gen.GenerateProgram(prog, "test-app", "")
 
 	fmt.Printf("Generated %d files\n", len(files))
 	fmt.Printf("Resources: %d\n", len(meta.Resources))

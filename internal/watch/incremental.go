@@ -122,8 +122,15 @@ func (ic *IncrementalCompiler) IncrementalBuild(changedFiles []string) (*Compile
 	}
 
 	// Generate Go code
+	// Derive module name from current directory
+	cwd, err := os.Getwd()
+	if err != nil {
+		return result, fmt.Errorf("failed to get current directory: %w", err)
+	}
+	moduleName := filepath.Base(cwd)
+
 	gen := codegen.NewGenerator()
-	files, err := gen.GenerateProgram(program)
+	files, err := gen.GenerateProgram(program, moduleName, "")
 	if err != nil {
 		result.Errors = append(result.Errors, errors.CompilerError{
 			Phase:    "codegen",
