@@ -1,0 +1,53 @@
+[
+  {
+    "test_case_name": "authenticated_handler_wrong_name",
+    "pattern": "authenticated_handler",
+    "llm_response": "@on create: [login]",
+    "expected_response": "@on create: [auth]",
+    "failure_reason": "name_unclear",
+    "description": "LLM uses 'login' instead of 'auth' for authentication"
+  },
+  {
+    "test_case_name": "cached_handler_wrong_params",
+    "pattern": "cached_handler",
+    "llm_response": "@on list: [cache(600)]",
+    "expected_response": "@on list: [cache(300)]",
+    "failure_reason": "template_ambiguous",
+    "description": "LLM uses different cache duration parameter"
+  },
+  {
+    "test_case_name": "authenticated_handler_hallucination",
+    "pattern": "authenticated_handler",
+    "llm_response": "function create() { requireAuth(); }",
+    "expected_response": "@on create: [auth]",
+    "failure_reason": "llm_hallucination",
+    "description": "LLM generates code in wrong language/format"
+  },
+  {
+    "test_case_name": "rate_limited_handler_too_specific",
+    "pattern": "rate_limited_handler",
+    "llm_response": "@on create: [rate_limit(10/hour)]",
+    "expected_response": "@on create: [rate_limit(10/hour)]",
+    "failure_reason": "pattern_too_specific",
+    "description": "Pattern appears too infrequently (low confidence)",
+    "pattern_frequency": 2,
+    "pattern_confidence": 0.2
+  },
+  {
+    "test_case_name": "generic_middleware_too_generic",
+    "pattern": "generic_handler",
+    "llm_response": "@on create: [middleware]",
+    "expected_response": "@on create: [middleware]",
+    "failure_reason": "pattern_too_generic",
+    "description": "Pattern is too vague and not useful"
+  },
+  {
+    "test_case_name": "insufficient_examples_pattern",
+    "pattern": "rare_pattern",
+    "llm_response": "@on create: [custom]",
+    "expected_response": "@on create: [custom]",
+    "failure_reason": "insufficient_examples",
+    "description": "Pattern has fewer than 3 examples",
+    "example_count": 1
+  }
+]

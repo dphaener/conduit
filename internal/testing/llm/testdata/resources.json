@@ -1,0 +1,45 @@
+[
+  {
+    "name": "Post",
+    "file_path": "/test/fixtures/post.cdt",
+    "middleware": {
+      "create": ["auth"],
+      "update": ["auth"],
+      "delete": ["auth"]
+    }
+  },
+  {
+    "name": "Comment",
+    "file_path": "/test/fixtures/comment.cdt",
+    "middleware": {
+      "create": ["auth"],
+      "update": ["auth"],
+      "delete": ["auth"]
+    }
+  },
+  {
+    "name": "Article",
+    "file_path": "/test/fixtures/article.cdt",
+    "middleware": {
+      "create": ["auth"],
+      "list": ["cache(300)"],
+      "show": ["cache(300)"]
+    }
+  },
+  {
+    "name": "Category",
+    "file_path": "/test/fixtures/category.cdt",
+    "middleware": {
+      "list": ["cache(300)"],
+      "show": ["cache(300)"]
+    }
+  },
+  {
+    "name": "User",
+    "file_path": "/test/fixtures/user.cdt",
+    "middleware": {
+      "create": ["rate_limit(10/hour)"],
+      "login": ["rate_limit(5/minute)"]
+    }
+  }
+]

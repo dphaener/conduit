@@ -49,6 +49,7 @@ Features:
 	rootCmd.AddCommand(NewTemplateCommand())
 	rootCmd.AddCommand(NewDocsCommand())
 	rootCmd.AddCommand(NewIntrospectCommand())
+	rootCmd.AddCommand(NewTestPatternsCommand())
 	rootCmd.AddCommand(NewCompletionCommand())
 
 	return rootCmd

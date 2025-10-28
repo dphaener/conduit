@@ -66,6 +66,10 @@ This repository contains the complete language specification and implementation 
 - 🌐 **[IMPLEMENTATION-WEB.md](IMPLEMENTATION-WEB.md)** - Web framework (routing, handlers, middleware)
 - 🛠️ **[IMPLEMENTATION-TOOLING.md](IMPLEMENTATION-TOOLING.md)** - Developer tools (CLI, LSP, debugger, formatter)
 
+### Pattern Validation
+- 🧪 **[docs/PATTERN-VALIDATION-GUIDE.md](docs/PATTERN-VALIDATION-GUIDE.md)** - LLM pattern validation system
+- ✅ **[docs/PATTERN-QUALITY-CHECKLIST.md](docs/PATTERN-QUALITY-CHECKLIST.md)** - Pattern quality review checklist
+
 ## Design Philosophy
 
 ### Explicitness over Brevity
@@ -100,6 +104,7 @@ LLMs don't experience tedium, they experience ambiguity. Verbose in service of c
 - **Discoverable**: Introspection API reveals patterns
 - **Maintainable**: Explicit code is easier to understand
 - **Scalable**: Go's performance handles production workloads
+- **Validated**: Built-in LLM pattern validation ensures AI-friendliness
 
 ## Compilation Target
 
