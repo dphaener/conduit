@@ -226,4 +226,40 @@
 //   - calls: Function/method invocation
 //   - belongs_to: Resource relationship
 //   - has_many: Collection relationship
+//
+// # Public API
+//
+// The package provides an ergonomic public API for runtime introspection
+// through the GetRegistry() function:
+//
+//	registry := metadata.GetRegistry()
+//
+//	// Query all resources
+//	resources := registry.Resources()
+//
+//	// Query single resource by name
+//	post, err := registry.Resource("Post")
+//
+//	// Query routes with filtering
+//	routes := registry.Routes(metadata.RouteFilter{
+//		Method: "GET",
+//		Resource: "Post",
+//	})
+//
+//	// Query patterns by category
+//	hookPatterns := registry.Patterns("hook")
+//
+//	// Query dependency graph
+//	deps, err := registry.Dependencies("Post", metadata.DependencyOptions{
+//		Depth: 2,
+//		Reverse: false,
+//	})
+//
+//	// Get complete schema
+//	schema := registry.GetSchema()
+//
+// All query methods leverage pre-computed indexes for fast lookups
+// (<1ms for typical queries) and return defensive copies to prevent
+// external mutation. The API is designed for simplicity, type-safety,
+// and error-safety without panics.
 package metadata
