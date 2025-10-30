@@ -48,10 +48,17 @@ func (g *Generator) generateStruct(resource *ast.ResourceNode) error {
 
 	// Collect all other fields
 	for _, field := range resource.Fields {
+		var tags string
+		if field.Name == "id" {
+			// ID fields always get primary tag
+			tags = fmt.Sprintf("`jsonapi:\"primary,%s\" db:\"id\" json:\"id\"`", jsonapiType)
+		} else {
+			tags = g.generateStructTags(field, resource.Name)
+		}
 		fields = append(fields, fieldInfo{
 			name: g.toGoFieldName(field.Name),
 			typ:  g.toGoType(field),
-			tags: g.generateStructTags(field, resource.Name),
+			tags: tags,
 		})
 	}
 
