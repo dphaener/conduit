@@ -15,6 +15,7 @@ type DatabaseStore struct {
 	tableName string
 	stopChan  chan struct{}
 	wg        sync.WaitGroup
+	closeOnce sync.Once
 }
 
 // DatabaseConfig holds database session store configuration
@@ -241,10 +242,12 @@ func (s *DatabaseStore) Refresh(ctx context.Context, sessionID string, ttl time.
 
 // Close stops the cleanup goroutine and waits for it to finish
 func (s *DatabaseStore) Close() error {
-	if s.stopChan != nil {
-		close(s.stopChan)
-		s.wg.Wait()
-	}
+	s.closeOnce.Do(func() {
+		if s.stopChan != nil {
+			close(s.stopChan)
+			s.wg.Wait()
+		}
+	})
 	// We don't close the DB as it's managed externally
 	return nil
 }
