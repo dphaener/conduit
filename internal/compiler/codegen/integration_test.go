@@ -409,7 +409,7 @@ func TestAcceptanceCriteria_HandlerGeneration(t *testing.T) {
 	}
 
 	gen := NewGenerator()
-	code, err := gen.GenerateHandlers(resources)
+	code, err := gen.GenerateHandlers(resources, "example.com/testapp")
 	if err != nil {
 		t.Fatalf("GenerateHandlers failed: %v", err)
 	}
