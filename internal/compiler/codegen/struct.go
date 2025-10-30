@@ -34,12 +34,15 @@ func (g *Generator) generateStruct(resource *ast.ResourceNode) error {
 	}
 	var fields []fieldInfo
 
+	// Generate JSON:API type for this resource
+	jsonapiType := g.toJSONAPIType(resource.Name)
+
 	// Add ID field if not explicitly defined
 	if !hasID {
 		fields = append(fields, fieldInfo{
 			name: "ID",
 			typ:  "int64",
-			tags: "`db:\"id\" json:\"id\"`",
+			tags: fmt.Sprintf("`jsonapi:\"primary,%s\" db:\"id\" json:\"id\"`", jsonapiType),
 		})
 	}
 
@@ -48,7 +51,7 @@ func (g *Generator) generateStruct(resource *ast.ResourceNode) error {
 		fields = append(fields, fieldInfo{
 			name: g.toGoFieldName(field.Name),
 			typ:  g.toGoType(field),
-			tags: g.generateStructTags(field),
+			tags: g.generateStructTags(field, resource.Name),
 		})
 	}
 
