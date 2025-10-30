@@ -328,8 +328,11 @@ func (g *Generator) generateListHandler(resource *ast.ResourceNode) {
 	g.writeLine("var results []*models.%s", resource.Name)
 	g.writeLine("for rows.Next() {")
 	g.indent++
-	g.writeLine("var item models.%s", resource.Name)
-	g.writeLine("if err := item.ScanRow(rows); err != nil {")
+	g.writeLine("item := &models.%s{}", resource.Name)
+
+	// Generate scan call with all field pointers
+	scanFields := g.generateScanFields(resource)
+	g.writeLine("if err := rows.Scan(%s); err != nil {", scanFields)
 	g.indent++
 	g.writeLine("if response.IsJSONAPI(r) {")
 	g.indent++
@@ -343,7 +346,7 @@ func (g *Generator) generateListHandler(resource *ast.ResourceNode) {
 	g.writeLine("return")
 	g.indent--
 	g.writeLine("}")
-	g.writeLine("results = append(results, &item)")
+	g.writeLine("results = append(results, item)")
 	g.indent--
 	g.writeLine("}")
 	g.writeLine("")
@@ -871,4 +874,30 @@ func (g *Generator) generateDeleteHandler(resource *ast.ResourceNode) {
 	g.writeLine("}")
 	g.indent--
 	g.writeLine("}")
+}
+
+// generateScanFields generates the list of field pointers for rows.Scan()
+func (g *Generator) generateScanFields(resource *ast.ResourceNode) string {
+	var scanFields []string
+
+	// Always include ID field first if not explicitly defined
+	hasID := false
+	for _, field := range resource.Fields {
+		if field.Name == "id" {
+			hasID = true
+			break
+		}
+	}
+
+	if !hasID {
+		scanFields = append(scanFields, "&item.ID")
+	}
+
+	// Add all other fields
+	for _, field := range resource.Fields {
+		fieldName := g.toGoFieldName(field.Name)
+		scanFields = append(scanFields, fmt.Sprintf("&item.%s", fieldName))
+	}
+
+	return strings.Join(scanFields, ", ")
 }
