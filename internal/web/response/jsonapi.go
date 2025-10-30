@@ -1,6 +1,7 @@
 package response
 
 import (
+	"encoding/json"
 	"fmt"
 	"mime"
 	"net/http"
@@ -9,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/DataDog/jsonapi"
+	"github.com/conduit-lang/conduit/internal/orm/validation"
 )
 
 const (
@@ -118,4 +120,94 @@ func buildPageURL(baseURL string, page, perPage int) string {
 	u.RawQuery = q.Encode()
 
 	return u.String()
+}
+
+// escapeJSONPointer escapes special characters per RFC 6901
+func escapeJSONPointer(token string) string {
+	// Order matters: escape ~ before /
+	token = strings.ReplaceAll(token, "~", "~0")
+	token = strings.ReplaceAll(token, "/", "~1")
+	return token
+}
+
+// TransformValidationErrors converts Conduit validation errors to JSON:API format
+func TransformValidationErrors(err *validation.ValidationErrors) []*jsonapi.Error {
+	var errors []*jsonapi.Error
+
+	for field, messages := range err.Fields {
+		for _, msg := range messages {
+			status := http.StatusUnprocessableEntity
+			errors = append(errors, &jsonapi.Error{
+				Status: &status,
+				Code:   "validation_error",
+				Title:  "Validation Failed",
+				Detail: msg,
+				Source: &jsonapi.ErrorSource{
+					Pointer: fmt.Sprintf("/data/attributes/%s", escapeJSONPointer(field)),
+				},
+			})
+		}
+	}
+
+	return errors
+}
+
+// RenderJSONAPIError renders a single JSON:API error
+func RenderJSONAPIError(w http.ResponseWriter, statusCode int, err error) {
+	// Check if it's a validation error
+	if validationErr, ok := err.(*validation.ValidationErrors); ok {
+		RenderJSONAPIErrors(w, http.StatusUnprocessableEntity, TransformValidationErrors(validationErr))
+		return
+	}
+
+	// Single error
+	errors := []*jsonapi.Error{{
+		Status: &statusCode,
+		Code:   errorCodeFromStatus(statusCode),
+		Title:  http.StatusText(statusCode),
+		Detail: err.Error(),
+	}}
+
+	RenderJSONAPIErrors(w, statusCode, errors)
+}
+
+// RenderJSONAPIErrors renders multiple JSON:API errors
+func RenderJSONAPIErrors(w http.ResponseWriter, statusCode int, errors []*jsonapi.Error) {
+	// Marshal errors BEFORE writing headers (critical pattern from Phase 1)
+	data, err := json.Marshal(map[string][]*jsonapi.Error{"errors": errors})
+	if err != nil {
+		// Fallback if marshaling fails
+		w.Header().Set("Content-Type", JSONAPIMediaType)
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(`{"errors":[{"status":"500","code":"internal_error","title":"Internal Server Error"}]}`))
+		return
+	}
+
+	w.Header().Set("Content-Type", JSONAPIMediaType)
+	w.WriteHeader(statusCode)
+	w.Write(data)
+}
+
+// ValidateJSONAPIContentType checks if the Content-Type is application/vnd.api+json
+// Returns true if valid, writes error response and returns false if invalid
+func ValidateJSONAPIContentType(w http.ResponseWriter, r *http.Request) bool {
+	contentType := r.Header.Get("Content-Type")
+
+	// Parse media type to check for parameters
+	mediaType, params, err := mime.ParseMediaType(contentType)
+
+	if err != nil || mediaType != JSONAPIMediaType {
+		RenderJSONAPIError(w, http.StatusUnsupportedMediaType,
+			fmt.Errorf("Content-Type must be application/vnd.api+json"))
+		return false
+	}
+
+	// JSON:API spec: Content-Type MUST NOT have media type parameters
+	if len(params) > 0 {
+		RenderJSONAPIError(w, http.StatusUnsupportedMediaType,
+			fmt.Errorf("Content-Type must be application/vnd.api+json without media type parameters"))
+		return false
+	}
+
+	return true
 }
