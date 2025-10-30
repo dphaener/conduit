@@ -5,6 +5,7 @@ go 1.23.1
 require (
 	github.com/AlecAivazis/survey/v2 v2.3.7
 	github.com/DATA-DOG/go-sqlmock v1.5.2
+	github.com/DataDog/jsonapi v0.13.0
 	github.com/alicebob/miniredis/v2 v2.35.0
 	github.com/fatih/color v1.18.0
 	github.com/fsnotify/fsnotify v1.9.0
