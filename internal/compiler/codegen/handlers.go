@@ -27,7 +27,7 @@ func (g *Generator) GenerateHandlers(resources []*ast.ResourceNode, moduleName s
 	g.imports["github.com/DataDog/jsonapi"] = true
 	g.imports[moduleName+"/models"] = true // Import models package
 	g.imports["github.com/conduit-lang/conduit/internal/web/response"] = true // Import response package for JSON:API support
-	g.imports["github.com/conduit-lang/conduit/internal/web/query"] = true    // Import query package for Phase 3 support
+	g.imports["github.com/conduit-lang/conduit/pkg/web/query"] = true    // Import query package for Phase 3 support
 
 	// Pre-scan resources for additional imports (like uuid for ID types)
 	for _, resource := range resources {

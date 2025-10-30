@@ -26,7 +26,7 @@ func TestGenerateListHandler_Phase3Features(t *testing.T) {
 	}
 
 	// Phase 3: Check query package import
-	if !strings.Contains(code, "github.com/conduit-lang/conduit/internal/web/query") {
+	if !strings.Contains(code, "github.com/conduit-lang/conduit/pkg/web/query") {
 		t.Error("Generated code should import query package")
 	}
 
