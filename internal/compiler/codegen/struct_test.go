@@ -387,9 +387,9 @@ func TestGenerateStruct_ExplicitIDField(t *testing.T) {
 		t.Error("Generated code should use uuid.UUID for explicit ID field")
 	}
 
-	// Verify ID field has correct JSON:API attribute tag (not primary)
-	if !strings.Contains(code, "jsonapi:\"attr,id\"") {
-		t.Error("Generated code should contain JSON:API attr tag for explicit ID field")
+	// Verify ID field has correct JSON:API primary tag
+	if !strings.Contains(code, "jsonapi:\"primary,users\"") {
+		t.Error("Generated code should contain JSON:API primary tag for explicit ID field")
 	}
 }
 
