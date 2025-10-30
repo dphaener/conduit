@@ -325,7 +325,7 @@ func (g *Generator) generateListHandler(resource *ast.ResourceNode) {
 
 	// Scan results
 	g.writeLine("// Scan results")
-	g.writeLine("var results []*models.%s", resource.Name)
+	g.writeLine("results := []*models.%s{}", resource.Name)
 	g.writeLine("for rows.Next() {")
 	g.indent++
 	g.writeLine("item := &models.%s{}", resource.Name)
