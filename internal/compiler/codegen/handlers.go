@@ -27,6 +27,7 @@ func (g *Generator) GenerateHandlers(resources []*ast.ResourceNode, moduleName s
 	g.imports["github.com/DataDog/jsonapi"] = true
 	g.imports[moduleName+"/models"] = true // Import models package
 	g.imports["github.com/conduit-lang/conduit/internal/web/response"] = true // Import response package for JSON:API support
+	g.imports["github.com/conduit-lang/conduit/internal/web/query"] = true    // Import query package for Phase 3 support
 
 	// Pre-scan resources for additional imports (like uuid for ID types)
 	for _, resource := range resources {
@@ -153,6 +154,35 @@ func (g *Generator) generateResourceHandlers(resource *ast.ResourceNode) error {
 	return nil
 }
 
+// toSnakeCase converts a field name to snake_case
+func (g *Generator) toSnakeCase(name string) string {
+	var result strings.Builder
+	for i, r := range name {
+		if i > 0 && r >= 'A' && r <= 'Z' {
+			result.WriteRune('_')
+		}
+		result.WriteRune(r)
+	}
+	return strings.ToLower(result.String())
+}
+
+// generateValidFieldsList generates code for a slice of valid field names
+func (g *Generator) generateValidFieldsList(resource *ast.ResourceNode) {
+	g.writeLine("validFields := []string{")
+	g.indent++
+	for i, field := range resource.Fields {
+		// Convert field name to snake_case for database column names
+		columnName := g.toSnakeCase(field.Name)
+		if i < len(resource.Fields)-1 {
+			g.writeLine("\"%s\",", columnName)
+		} else {
+			g.writeLine("\"%s\",", columnName)
+		}
+	}
+	g.indent--
+	g.writeLine("}")
+}
+
 // generateListHandler generates the LIST handler (GET /resources)
 func (g *Generator) generateListHandler(resource *ast.ResourceNode) {
 	resourceLower := strings.ToLower(resource.Name)
@@ -194,22 +224,167 @@ func (g *Generator) generateListHandler(resource *ast.ResourceNode) {
 	g.writeLine("}")
 	g.writeLine("")
 
-	// Call FindAll function
-	g.writeLine("results, err := models.FindAll%s(ctx, db, limit, offset)", resource.Name)
+	// Parse JSON:API Phase 3 query parameters
+	g.writeLine("// Parse JSON:API Phase 3 query parameters")
+	g.writeLine("includes := query.ParseInclude(r)")
+	g.writeLine("fields := query.ParseFields(r)")
+	g.writeLine("filters := query.ParseFilter(r)")
+	g.writeLine("sorts := query.ParseSort(r)")
+	g.writeLine("")
+
+	// TODO comment for includes support
+	g.writeLine("// TODO: Phase 3 - Load relationships if includes is not empty")
+	g.writeLine("// This requires implementing relationship loading in models package")
+	g.writeLine("_ = includes // Silence unused variable warning")
+	g.writeLine("")
+
+	// Generate valid fields list
+	g.writeLine("// Valid fields for filtering and sorting")
+	g.generateValidFieldsList(resource)
+	g.writeLine("")
+
+	// Build base query with filtering and sorting
+	g.writeLine("// Build base query")
+	g.writeLine("baseQuery := \"SELECT * FROM %s\"", tableName)
+	g.writeLine("")
+
+	// Apply filtering
+	g.writeLine("// Apply filtering")
+	g.writeLine("whereClause, filterArgs, err := query.BuildFilterClause(filters, \"%s\", validFields)", tableName)
 	g.writeLine("if err != nil {")
 	g.indent++
-	g.writeLine("respondWithError(w, fmt.Sprintf(\"Failed to list %s: %%v\", err), http.StatusInternalServerError)", resourceLower+"s")
+	g.writeLine("if response.IsJSONAPI(r) {")
+	g.indent++
+	g.writeLine("response.RenderJSONAPIError(w, http.StatusBadRequest, err)")
+	g.indent--
+	g.writeLine("} else {")
+	g.indent++
+	g.writeLine("respondWithError(w, err.Error(), http.StatusBadRequest)")
+	g.indent--
+	g.writeLine("}")
+	g.writeLine("return")
+	g.indent--
+	g.writeLine("}")
+	g.writeLine("if whereClause != \"\" {")
+	g.indent++
+	g.writeLine("baseQuery += \" \" + whereClause")
+	g.indent--
+	g.writeLine("}")
+	g.writeLine("")
+
+	// Apply sorting
+	g.writeLine("// Apply sorting")
+	g.writeLine("orderByClause, err := query.BuildSortClause(sorts, \"%s\", validFields)", tableName)
+	g.writeLine("if err != nil {")
+	g.indent++
+	g.writeLine("if response.IsJSONAPI(r) {")
+	g.indent++
+	g.writeLine("response.RenderJSONAPIError(w, http.StatusBadRequest, err)")
+	g.indent--
+	g.writeLine("} else {")
+	g.indent++
+	g.writeLine("respondWithError(w, err.Error(), http.StatusBadRequest)")
+	g.indent--
+	g.writeLine("}")
+	g.writeLine("return")
+	g.indent--
+	g.writeLine("}")
+	g.writeLine("if orderByClause != \"\" {")
+	g.indent++
+	g.writeLine("baseQuery += \" \" + orderByClause")
+	g.indent--
+	g.writeLine("}")
+	g.writeLine("")
+
+	// Apply pagination
+	g.writeLine("// Apply pagination")
+	g.writeLine("paramIndex := len(filterArgs) + 1")
+	g.writeLine("baseQuery += fmt.Sprintf(\" LIMIT $%%d OFFSET $%%d\", paramIndex, paramIndex+1)")
+	g.writeLine("")
+
+	// Execute query
+	g.writeLine("// Execute query")
+	g.writeLine("args := append(filterArgs, limit, offset)")
+	g.writeLine("rows, err := db.QueryContext(ctx, baseQuery, args...)")
+	g.writeLine("if err != nil {")
+	g.indent++
+	g.writeLine("if response.IsJSONAPI(r) {")
+	g.indent++
+	g.writeLine("response.RenderJSONAPIError(w, http.StatusInternalServerError, fmt.Errorf(\"Failed to query %s: %%v\", err))", resourceLower+"s")
+	g.indent--
+	g.writeLine("} else {")
+	g.indent++
+	g.writeLine("respondWithError(w, fmt.Sprintf(\"Failed to query %s: %%v\", err), http.StatusInternalServerError)", resourceLower+"s")
+	g.indent--
+	g.writeLine("}")
+	g.writeLine("return")
+	g.indent--
+	g.writeLine("}")
+	g.writeLine("defer rows.Close()")
+	g.writeLine("")
+
+	// Scan results
+	g.writeLine("// Scan results")
+	g.writeLine("var results []*models.%s", resource.Name)
+	g.writeLine("for rows.Next() {")
+	g.indent++
+	g.writeLine("var item models.%s", resource.Name)
+	g.writeLine("if err := item.ScanRow(rows); err != nil {")
+	g.indent++
+	g.writeLine("if response.IsJSONAPI(r) {")
+	g.indent++
+	g.writeLine("response.RenderJSONAPIError(w, http.StatusInternalServerError, fmt.Errorf(\"Failed to scan %s: %%v\", err))", resourceLower)
+	g.indent--
+	g.writeLine("} else {")
+	g.indent++
+	g.writeLine("respondWithError(w, fmt.Sprintf(\"Failed to scan %s: %%v\", err), http.StatusInternalServerError)", resourceLower)
+	g.indent--
+	g.writeLine("}")
+	g.writeLine("return")
+	g.indent--
+	g.writeLine("}")
+	g.writeLine("results = append(results, &item)")
+	g.indent--
+	g.writeLine("}")
+	g.writeLine("")
+	g.writeLine("if err := rows.Err(); err != nil {")
+	g.indent++
+	g.writeLine("if response.IsJSONAPI(r) {")
+	g.indent++
+	g.writeLine("response.RenderJSONAPIError(w, http.StatusInternalServerError, fmt.Errorf(\"Error iterating %s: %%v\", err))", resourceLower+"s")
+	g.indent--
+	g.writeLine("} else {")
+	g.indent++
+	g.writeLine("respondWithError(w, fmt.Sprintf(\"Error iterating %s: %%v\", err), http.StatusInternalServerError)", resourceLower+"s")
+	g.indent--
+	g.writeLine("}")
 	g.writeLine("return")
 	g.indent--
 	g.writeLine("}")
 	g.writeLine("")
 
-	// Get total count for pagination
-	g.writeLine("// Get total count for pagination")
-	g.writeLine("total, err := models.Count%s(ctx, db)", resource.Name)
+	// Get total count for pagination (use filtered count)
+	g.writeLine("// Get total count for pagination (with filters applied)")
+	g.writeLine("countQuery := \"SELECT COUNT(*) FROM %s\"", tableName)
+	g.writeLine("if whereClause != \"\" {")
+	g.indent++
+	g.writeLine("countQuery += \" \" + whereClause")
+	g.indent--
+	g.writeLine("}")
+	g.writeLine("")
+	g.writeLine("var total int")
+	g.writeLine("err = db.QueryRowContext(ctx, countQuery, filterArgs...).Scan(&total)")
 	g.writeLine("if err != nil {")
 	g.indent++
+	g.writeLine("if response.IsJSONAPI(r) {")
+	g.indent++
+	g.writeLine("response.RenderJSONAPIError(w, http.StatusInternalServerError, fmt.Errorf(\"Failed to count %s: %%v\", err))", resourceLower+"s")
+	g.indent--
+	g.writeLine("} else {")
+	g.indent++
 	g.writeLine("respondWithError(w, fmt.Sprintf(\"Failed to count %s: %%v\", err), http.StatusInternalServerError)", resourceLower+"s")
+	g.indent--
+	g.writeLine("}")
 	g.writeLine("return")
 	g.indent--
 	g.writeLine("}")
@@ -230,12 +405,45 @@ func (g *Generator) generateListHandler(resource *ast.ResourceNode) {
 	g.writeLine("}")
 	g.writeLine("links := response.BuildPaginationLinks(r.URL.Path, page, limit, total)")
 	g.writeLine("")
-	g.writeLine("if err := response.RenderJSONAPIWithMeta(w, http.StatusOK, results, meta, links); err != nil {")
+
+	// Marshal with options
+	g.writeLine("// Marshal with pagination metadata")
+	g.writeLine("opts := []jsonapi.MarshalOption{")
 	g.indent++
-	g.writeLine("respondWithError(w, \"Failed to encode response\", http.StatusInternalServerError)")
+	g.writeLine("jsonapi.MarshalMeta(meta),")
+	g.writeLine("jsonapi.MarshalLinks(links),")
+	g.indent--
+	g.writeLine("}")
+	g.writeLine("")
+	g.writeLine("data, err := jsonapi.Marshal(results, opts...)")
+	g.writeLine("if err != nil {")
+	g.indent++
+	g.writeLine("response.RenderJSONAPIError(w, http.StatusInternalServerError, fmt.Errorf(\"Failed to marshal response: %%v\", err))")
 	g.writeLine("return")
 	g.indent--
 	g.writeLine("}")
+	g.writeLine("")
+
+	// Apply sparse fieldsets
+	g.writeLine("// Apply sparse fieldsets if requested")
+	g.writeLine("if len(fields) > 0 {")
+	g.indent++
+	g.writeLine("data, err = response.ApplySparseFieldsets(data, fields)")
+	g.writeLine("if err != nil {")
+	g.indent++
+	g.writeLine("response.RenderJSONAPIError(w, http.StatusInternalServerError, fmt.Errorf(\"Failed to apply sparse fieldsets: %%v\", err))")
+	g.writeLine("return")
+	g.indent--
+	g.writeLine("}")
+	g.indent--
+	g.writeLine("}")
+	g.writeLine("")
+
+	// Write response
+	g.writeLine("w.Header().Set(\"Content-Type\", response.JSONAPIMediaType)")
+	g.writeLine("w.WriteHeader(http.StatusOK)")
+	g.writeLine("w.Write(data)")
+
 	g.indent--
 	g.writeLine("} else {")
 	g.indent++
@@ -243,7 +451,7 @@ func (g *Generator) generateListHandler(resource *ast.ResourceNode) {
 	g.writeLine("w.Header().Set(\"Content-Type\", \"application/json\")")
 	g.writeLine("if err := json.NewEncoder(w).Encode(results); err != nil {")
 	g.indent++
-	g.writeLine("respondWithError(w, fmt.Sprintf(\"Failed to encode response: %v\", err), http.StatusInternalServerError)")
+	g.writeLine("respondWithError(w, fmt.Sprintf(\"Failed to encode response: %%v\", err), http.StatusInternalServerError)")
 	g.writeLine("return")
 	g.indent--
 	g.writeLine("}")
