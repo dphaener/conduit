@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -652,6 +653,48 @@ func (s *System) writeGeneratedFiles(files map[string]string) error {
 	// Rename temp directory to final location
 	if err := os.Rename(tmpDir, generatedDir); err != nil {
 		return fmt.Errorf("failed to move temp directory to final location: %w", err)
+	}
+
+	// Copy migration files to root migrations/ directory so conduit migrate can find them
+	if err := s.copyMigrationsToRoot(files); err != nil {
+		return fmt.Errorf("failed to copy migrations to root: %w", err)
+	}
+
+	return nil
+}
+
+// copyMigrationsToRoot copies generated migration files to the root migrations/ directory
+// so that conduit migrate commands can find them
+func (s *System) copyMigrationsToRoot(files map[string]string) error {
+	// Ensure root migrations directory exists
+	migrationsDir := "migrations"
+	if err := os.MkdirAll(migrationsDir, 0755); err != nil {
+		return fmt.Errorf("failed to create root migrations directory: %w", err)
+	}
+
+	copiedCount := 0
+	// Copy each migration file from generated files to root
+	for filename, content := range files {
+		if strings.HasPrefix(filename, "migrations/") {
+			// Extract just the migration filename (e.g., "001_init.sql")
+			migrationName := filepath.Base(filename)
+			destPath := filepath.Join(migrationsDir, migrationName)
+
+			// Write migration file to root migrations/ directory
+			if err := os.WriteFile(destPath, []byte(content), 0644); err != nil {
+				return fmt.Errorf("failed to write migration %s: %w", migrationName, err)
+			}
+
+			copiedCount++
+			if s.options.Verbose {
+				fmt.Printf("Copied migration to %s\n", destPath)
+			}
+		}
+	}
+
+	// Always report if migrations were copied (not just in verbose mode)
+	if copiedCount > 0 && !s.options.Verbose {
+		fmt.Printf("✓ Copied %d migration(s) to %s/\n", copiedCount, migrationsDir)
 	}
 
 	return nil

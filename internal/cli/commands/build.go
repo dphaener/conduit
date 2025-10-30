@@ -324,6 +324,33 @@ Or run conduit build from the conduit source directory.`)
 		}
 	}
 
+	// Copy migration files to root migrations/ directory so conduit migrate can find them
+	migrationsDir := "migrations"
+	if err := os.MkdirAll(migrationsDir, 0755); err != nil {
+		return fmt.Errorf("failed to create root migrations directory: %w", err)
+	}
+
+	migrationCount := 0
+	for filename, content := range files {
+		if strings.HasPrefix(filename, "migrations/") {
+			migrationName := filepath.Base(filename)
+			destPath := filepath.Join(migrationsDir, migrationName)
+
+			if err := os.WriteFile(destPath, []byte(content), 0644); err != nil {
+				return fmt.Errorf("failed to write migration %s: %w", migrationName, err)
+			}
+
+			migrationCount++
+			if buildVerbose {
+				infoColor.Printf("  Copied migration to %s\n", destPath)
+			}
+		}
+	}
+
+	if migrationCount > 0 && !buildVerbose {
+		infoColor.Printf("  Copied %d migration(s) to migrations/\n", migrationCount)
+	}
+
 	// Download Go dependencies and create go.sum
 	if buildVerbose {
 		infoColor.Println("Downloading dependencies...")
