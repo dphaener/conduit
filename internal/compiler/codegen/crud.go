@@ -234,6 +234,29 @@ func (g *Generator) generateFindAll(resource *ast.ResourceNode) {
 	g.writeLine("}")
 }
 
+// generateCount generates the Count() function for a resource
+func (g *Generator) generateCount(resource *ast.ResourceNode) {
+	g.writeLine("// Count%s returns the total number of %s records", resource.Name, strings.ToLower(resource.Name)+"s")
+	g.writeLine("func Count%s(ctx context.Context, db *sql.DB) (int, error) {", resource.Name)
+	g.indent++
+
+	g.writeLine("var count int")
+	g.writeLine("query := `SELECT COUNT(*) FROM %s`", g.toTableName(resource.Name))
+	g.writeLine("")
+
+	g.writeLine("err := db.QueryRowContext(ctx, query).Scan(&count)")
+	g.writeLine("if err != nil {")
+	g.indent++
+	g.writeLine("return 0, fmt.Errorf(\"failed to count %s: %%w\", err)", strings.ToLower(resource.Name)+"s")
+	g.indent--
+	g.writeLine("}")
+	g.writeLine("")
+
+	g.writeLine("return count, nil")
+	g.indent--
+	g.writeLine("}")
+}
+
 // buildInsertQuery builds the column list, placeholders, and values for an INSERT query
 func (g *Generator) buildInsertQuery(resource *ast.ResourceNode) (columns, placeholders, values []string) {
 	receiverName := strings.ToLower(resource.Name[0:1])

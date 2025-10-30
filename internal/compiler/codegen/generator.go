@@ -251,6 +251,9 @@ func (g *Generator) GenerateResource(resource *ast.ResourceNode) (string, error)
 	g.writeLine("")
 
 	g.generateFindAll(resource)
+	g.writeLine("")
+
+	g.generateCount(resource)
 
 	return g.buf.String(), nil
 }
