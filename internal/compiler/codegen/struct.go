@@ -51,13 +51,9 @@ func (g *Generator) generateStruct(resource *ast.ResourceNode) error {
 		var tags string
 		var typ string
 		if field.Name == "id" {
-			// ID fields always get primary tag
-			tags = fmt.Sprintf("`jsonapi:\"primary,%s\" db:\"id\" json:\"id\"`", jsonapiType)
-			// Make UUID IDs pointers so they can be omitted in JSON:API create requests
+			// ID fields always get primary tag with omitempty for optional creation
+			tags = fmt.Sprintf("`jsonapi:\"primary,%s,omitempty\" db:\"id\" json:\"id,omitempty\"`", jsonapiType)
 			typ = g.toGoType(field)
-			if field.Type.Name == "uuid" {
-				typ = "*" + typ
-			}
 		} else {
 			tags = g.generateStructTags(field, resource.Name)
 			typ = g.toGoType(field)

@@ -328,13 +328,7 @@ func (g *Generator) generateAutoFields(resource *ast.ResourceNode, operation str
 		if operation == "create" && hasConstraint(field, "auto") {
 			switch field.Type.Name {
 			case "uuid":
-				// ID fields are pointers, need special handling
-				if field.Name == "id" {
-					g.writeLine("id := uuid.New()")
-					g.writeLine("%s.%s = &id", receiverName, g.toGoFieldName(field.Name))
-				} else {
-					g.writeLine("%s.%s = uuid.New()", receiverName, g.toGoFieldName(field.Name))
-				}
+				g.writeLine("%s.%s = uuid.New()", receiverName, g.toGoFieldName(field.Name))
 			case "timestamp":
 				g.writeLine("%s.%s = time.Now()", receiverName, g.toGoFieldName(field.Name))
 			}
