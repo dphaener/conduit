@@ -465,8 +465,26 @@ func (g *Generator) toTableName(name string) string {
 	return strings.ToLower(name) + "s"
 }
 
+// toJSONAPIType converts a resource name to a JSON:API type (pluralized, snake_case)
+// Examples: User -> "users", BlogPost -> "blog_posts"
+func (g *Generator) toJSONAPIType(name string) string {
+	// Convert PascalCase to snake_case
+	var result strings.Builder
+	for i, r := range name {
+		if i > 0 && r >= 'A' && r <= 'Z' {
+			result.WriteRune('_')
+		}
+		result.WriteRune(r)
+	}
+	snakeCase := strings.ToLower(result.String())
+
+	// Simple pluralization: just add 's'
+	// TODO: Handle irregular plurals
+	return snakeCase + "s"
+}
+
 // generateStructTags generates struct tags for a field
-func (g *Generator) generateStructTags(field *ast.FieldNode) string {
+func (g *Generator) generateStructTags(field *ast.FieldNode, resourceName string) string {
 	dbTag := g.toDBColumnName(field.Name)
 	jsonTag := field.Name
 
@@ -475,7 +493,19 @@ func (g *Generator) generateStructTags(field *ast.FieldNode) string {
 		jsonTag += ",omitempty"
 	}
 
-	return fmt.Sprintf("`db:%q json:%q`", dbTag, jsonTag)
+	// Generate JSON:API tag
+	var jsonapiTag string
+	if field.Type.Kind == ast.TypeResource || field.Type.Kind == ast.TypeArray {
+		// This is a relationship field
+		relationName := g.toDBColumnName(field.Name)
+		jsonapiTag = fmt.Sprintf("relation,%s", relationName)
+	} else {
+		// This is a regular attribute field
+		attrName := g.toDBColumnName(field.Name)
+		jsonapiTag = fmt.Sprintf("attr,%s", attrName)
+	}
+
+	return fmt.Sprintf("`jsonapi:%q db:%q json:%q`", jsonapiTag, dbTag, jsonTag)
 }
 
 // sortStrings is a simple bubble sort for string slices
