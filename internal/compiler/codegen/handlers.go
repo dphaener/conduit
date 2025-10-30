@@ -299,7 +299,7 @@ func (g *Generator) generateListHandler(resource *ast.ResourceNode) {
 	// Apply pagination
 	g.writeLine("// Apply pagination")
 	g.writeLine("paramIndex := len(filterArgs) + 1")
-	g.writeLine("baseQuery += fmt.Sprintf(\" LIMIT $%%d OFFSET $%%d\", paramIndex, paramIndex+1)")
+	g.writeLine("baseQuery += fmt.Sprintf(\" LIMIT $%d OFFSET $%d\", paramIndex, paramIndex+1)")
 	g.writeLine("")
 
 	// Execute query
