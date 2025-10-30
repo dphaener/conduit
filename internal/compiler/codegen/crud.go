@@ -263,8 +263,9 @@ func (g *Generator) buildInsertQuery(resource *ast.ResourceNode) (columns, place
 	paramNum := 1
 
 	for _, field := range resource.Fields {
-		// Skip auto-generated ID fields
-		if field.Name == "id" && hasConstraint(field, "auto") {
+		// Skip database-generated ID fields (int with auto_increment)
+		// But include client-generated UUID IDs
+		if field.Name == "id" && hasConstraint(field, "auto") && field.Type.Name != "uuid" {
 			continue
 		}
 
@@ -327,7 +328,13 @@ func (g *Generator) generateAutoFields(resource *ast.ResourceNode, operation str
 		if operation == "create" && hasConstraint(field, "auto") {
 			switch field.Type.Name {
 			case "uuid":
-				g.writeLine("%s.%s = uuid.New()", receiverName, g.toGoFieldName(field.Name))
+				// ID fields are pointers, need special handling
+				if field.Name == "id" {
+					g.writeLine("id := uuid.New()")
+					g.writeLine("%s.%s = &id", receiverName, g.toGoFieldName(field.Name))
+				} else {
+					g.writeLine("%s.%s = uuid.New()", receiverName, g.toGoFieldName(field.Name))
+				}
 			case "timestamp":
 				g.writeLine("%s.%s = time.Now()", receiverName, g.toGoFieldName(field.Name))
 			}
