@@ -23,6 +23,7 @@ func (g *Generator) GenerateHandlers(resources []*ast.ResourceNode, moduleName s
 	g.imports["strconv"] = true
 	g.imports["github.com/go-chi/chi/v5"] = true
 	g.imports[moduleName+"/models"] = true // Import models package
+	g.imports["github.com/conduit-lang/conduit/internal/web/response"] = true // Import response package for JSON:API support
 
 	// Pre-scan resources for additional imports (like uuid for ID types)
 	for _, resource := range resources {
@@ -200,12 +201,49 @@ func (g *Generator) generateListHandler(resource *ast.ResourceNode) {
 	g.writeLine("}")
 	g.writeLine("")
 
-	// Write JSON response
+	// Get total count for pagination
+	g.writeLine("// Get total count for pagination")
+	g.writeLine("total, err := models.Count%s(ctx, db)", resource.Name)
+	g.writeLine("if err != nil {")
+	g.indent++
+	g.writeLine("respondWithError(w, fmt.Sprintf(\"Failed to count %s: %%v\", err), http.StatusInternalServerError)", resourceLower+"s")
+	g.writeLine("return")
+	g.indent--
+	g.writeLine("}")
+	g.writeLine("")
+
+	// Content negotiation
+	g.writeLine("// Content negotiation: JSON:API or legacy JSON")
+	g.writeLine("if response.IsJSONAPI(r) {")
+	g.indent++
+	g.writeLine("// JSON:API format")
+	g.writeLine("page := (offset / limit) + 1")
+	g.writeLine("meta := map[string]interface{}{")
+	g.indent++
+	g.writeLine("\"page\": page,")
+	g.writeLine("\"per_page\": limit,")
+	g.writeLine("\"total\": total,")
+	g.indent--
+	g.writeLine("}")
+	g.writeLine("links := response.BuildPaginationLinks(r.URL.Path, page, limit, total)")
+	g.writeLine("")
+	g.writeLine("if err := response.RenderJSONAPIWithMeta(w, http.StatusOK, results, meta, links); err != nil {")
+	g.indent++
+	g.writeLine("respondWithError(w, \"Failed to encode response\", http.StatusInternalServerError)")
+	g.writeLine("return")
+	g.indent--
+	g.writeLine("}")
+	g.indent--
+	g.writeLine("} else {")
+	g.indent++
+	g.writeLine("// Legacy JSON format")
 	g.writeLine("w.Header().Set(\"Content-Type\", \"application/json\")")
 	g.writeLine("if err := json.NewEncoder(w).Encode(results); err != nil {")
 	g.indent++
 	g.writeLine("respondWithError(w, fmt.Sprintf(\"Failed to encode response: %v\", err), http.StatusInternalServerError)")
 	g.writeLine("return")
+	g.indent--
+	g.writeLine("}")
 	g.indent--
 	g.writeLine("}")
 
@@ -249,12 +287,28 @@ func (g *Generator) generateGetHandler(resource *ast.ResourceNode) {
 	g.writeLine("}")
 	g.writeLine("")
 
-	// Write JSON response
+	// Content negotiation
+	g.writeLine("// Content negotiation: JSON:API or legacy JSON")
+	g.writeLine("if response.IsJSONAPI(r) {")
+	g.indent++
+	g.writeLine("// JSON:API format")
+	g.writeLine("if err := response.RenderJSONAPI(w, http.StatusOK, result); err != nil {")
+	g.indent++
+	g.writeLine("respondWithError(w, \"Failed to encode response\", http.StatusInternalServerError)")
+	g.writeLine("return")
+	g.indent--
+	g.writeLine("}")
+	g.indent--
+	g.writeLine("} else {")
+	g.indent++
+	g.writeLine("// Legacy JSON format")
 	g.writeLine("w.Header().Set(\"Content-Type\", \"application/json\")")
 	g.writeLine("if err := json.NewEncoder(w).Encode(result); err != nil {")
 	g.indent++
 	g.writeLine("respondWithError(w, fmt.Sprintf(\"Failed to encode response: %v\", err), http.StatusInternalServerError)")
 	g.writeLine("return")
+	g.indent--
+	g.writeLine("}")
 	g.indent--
 	g.writeLine("}")
 
