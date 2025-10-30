@@ -32,6 +32,21 @@ func TestIsJSONAPI(t *testing.T) {
 			want:   true,
 		},
 		{
+			name:   "JSON:API with charset parameter",
+			accept: "application/vnd.api+json; charset=utf-8",
+			want:   true,
+		},
+		{
+			name:   "JSON:API with multiple parameters",
+			accept: "application/vnd.api+json; charset=utf-8; version=1",
+			want:   true,
+		},
+		{
+			name:   "JSON:API with quality value",
+			accept: "application/vnd.api+json;q=0.9",
+			want:   true,
+		},
+		{
 			name:   "Regular JSON",
 			accept: "application/json",
 			want:   false,
@@ -270,52 +285,52 @@ func TestBuildPaginationLinks(t *testing.T) {
 	t.Run("first page", func(t *testing.T) {
 		links := BuildPaginationLinks("/api/resources", 1, 10, 25)
 
-		if links.Self != "/api/resources?page[limit]=10&page[offset]=0" {
-			t.Errorf("Self link = %v, want /api/resources?page[limit]=10&page[offset]=0", links.Self)
+		if links.Self != "/api/resources?page%5Blimit%5D=10&page%5Boffset%5D=0" {
+			t.Errorf("Self link = %v, want /api/resources?page%%5Blimit%%5D=10&page%%5Boffset%%5D=0", links.Self)
 		}
 
-		if links.First != "/api/resources?page[limit]=10&page[offset]=0" {
-			t.Errorf("First link = %v, want /api/resources?page[limit]=10&page[offset]=0", links.First)
+		if links.First != "/api/resources?page%5Blimit%5D=10&page%5Boffset%5D=0" {
+			t.Errorf("First link = %v, want /api/resources?page%%5Blimit%%5D=10&page%%5Boffset%%5D=0", links.First)
 		}
 
-		if links.Last != "/api/resources?page[limit]=10&page[offset]=20" {
-			t.Errorf("Last link = %v, want /api/resources?page[limit]=10&page[offset]=20", links.Last)
+		if links.Last != "/api/resources?page%5Blimit%5D=10&page%5Boffset%5D=20" {
+			t.Errorf("Last link = %v, want /api/resources?page%%5Blimit%%5D=10&page%%5Boffset%%5D=20", links.Last)
 		}
 
 		if links.Prev != "" {
 			t.Errorf("Prev link should be empty on first page, got %v", links.Prev)
 		}
 
-		if links.Next != "/api/resources?page[limit]=10&page[offset]=10" {
-			t.Errorf("Next link = %v, want /api/resources?page[limit]=10&page[offset]=10", links.Next)
+		if links.Next != "/api/resources?page%5Blimit%5D=10&page%5Boffset%5D=10" {
+			t.Errorf("Next link = %v, want /api/resources?page%%5Blimit%%5D=10&page%%5Boffset%%5D=10", links.Next)
 		}
 	})
 
 	t.Run("middle page", func(t *testing.T) {
 		links := BuildPaginationLinks("/api/resources", 2, 10, 25)
 
-		if links.Self != "/api/resources?page[limit]=10&page[offset]=10" {
-			t.Errorf("Self link = %v, want /api/resources?page[limit]=10&page[offset]=10", links.Self)
+		if links.Self != "/api/resources?page%5Blimit%5D=10&page%5Boffset%5D=10" {
+			t.Errorf("Self link = %v, want /api/resources?page%%5Blimit%%5D=10&page%%5Boffset%%5D=10", links.Self)
 		}
 
-		if links.Prev != "/api/resources?page[limit]=10&page[offset]=0" {
-			t.Errorf("Prev link = %v, want /api/resources?page[limit]=10&page[offset]=0", links.Prev)
+		if links.Prev != "/api/resources?page%5Blimit%5D=10&page%5Boffset%5D=0" {
+			t.Errorf("Prev link = %v, want /api/resources?page%%5Blimit%%5D=10&page%%5Boffset%%5D=0", links.Prev)
 		}
 
-		if links.Next != "/api/resources?page[limit]=10&page[offset]=20" {
-			t.Errorf("Next link = %v, want /api/resources?page[limit]=10&page[offset]=20", links.Next)
+		if links.Next != "/api/resources?page%5Blimit%5D=10&page%5Boffset%5D=20" {
+			t.Errorf("Next link = %v, want /api/resources?page%%5Blimit%%5D=10&page%%5Boffset%%5D=20", links.Next)
 		}
 	})
 
 	t.Run("last page", func(t *testing.T) {
 		links := BuildPaginationLinks("/api/resources", 3, 10, 25)
 
-		if links.Self != "/api/resources?page[limit]=10&page[offset]=20" {
-			t.Errorf("Self link = %v, want /api/resources?page[limit]=10&page[offset]=20", links.Self)
+		if links.Self != "/api/resources?page%5Blimit%5D=10&page%5Boffset%5D=20" {
+			t.Errorf("Self link = %v, want /api/resources?page%%5Blimit%%5D=10&page%%5Boffset%%5D=20", links.Self)
 		}
 
-		if links.Prev != "/api/resources?page[limit]=10&page[offset]=10" {
-			t.Errorf("Prev link = %v, want /api/resources?page[limit]=10&page[offset]=10", links.Prev)
+		if links.Prev != "/api/resources?page%5Blimit%5D=10&page%5Boffset%5D=10" {
+			t.Errorf("Prev link = %v, want /api/resources?page%%5Blimit%%5D=10&page%%5Boffset%%5D=10", links.Prev)
 		}
 
 		if links.Next != "" {
@@ -357,8 +372,8 @@ func TestBuildPaginationLinks(t *testing.T) {
 		links := BuildPaginationLinks("/api/resources", 3, 20, 100)
 
 		// Page 3 means offset should be (3-1)*20 = 40
-		if links.Self != "/api/resources?page[limit]=20&page[offset]=40" {
-			t.Errorf("Self link = %v, want /api/resources?page[limit]=20&page[offset]=40", links.Self)
+		if links.Self != "/api/resources?page%5Blimit%5D=20&page%5Boffset%5D=40" {
+			t.Errorf("Self link = %v, want /api/resources?page%%5Blimit%%5D=20&page%%5Boffset%%5D=40", links.Self)
 		}
 	})
 }
@@ -377,28 +392,49 @@ func TestBuildPageURL(t *testing.T) {
 			baseURL: "/api/users",
 			page:    1,
 			perPage: 10,
-			want:    "/api/users?page[limit]=10&page[offset]=0",
+			want:    "/api/users?page%5Blimit%5D=10&page%5Boffset%5D=0",
 		},
 		{
 			name:    "page 2",
 			baseURL: "/api/users",
 			page:    2,
 			perPage: 10,
-			want:    "/api/users?page[limit]=10&page[offset]=10",
+			want:    "/api/users?page%5Blimit%5D=10&page%5Boffset%5D=10",
 		},
 		{
 			name:    "page 5 with large page size",
 			baseURL: "/api/posts",
 			page:    5,
 			perPage: 50,
-			want:    "/api/posts?page[limit]=50&page[offset]=200",
+			want:    "/api/posts?page%5Blimit%5D=50&page%5Boffset%5D=200",
 		},
 		{
 			name:    "base URL with trailing slash",
 			baseURL: "/api/comments/",
 			page:    1,
 			perPage: 25,
-			want:    "/api/comments/?page[limit]=25&page[offset]=0",
+			want:    "/api/comments/?page%5Blimit%5D=25&page%5Boffset%5D=0",
+		},
+		{
+			name:    "base URL with existing query parameter",
+			baseURL: "/api/users?filter[status]=active",
+			page:    1,
+			perPage: 10,
+			want:    "/api/users?filter%5Bstatus%5D=active&page%5Blimit%5D=10&page%5Boffset%5D=0",
+		},
+		{
+			name:    "base URL with multiple existing query parameters",
+			baseURL: "/api/users?filter[status]=active&sort=-created_at",
+			page:    2,
+			perPage: 20,
+			want:    "/api/users?filter%5Bstatus%5D=active&page%5Blimit%5D=20&page%5Boffset%5D=20&sort=-created_at",
+		},
+		{
+			name:    "base URL with existing pagination params should override",
+			baseURL: "/api/users?page[limit]=5&page[offset]=0",
+			page:    3,
+			perPage: 10,
+			want:    "/api/users?page%5Blimit%5D=10&page%5Boffset%5D=20",
 		},
 	}
 
