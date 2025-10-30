@@ -722,7 +722,7 @@ func (g *Generator) generateUpdateHandler(resource *ast.ResourceNode) {
 	// Validate ID matches URL
 	g.writeLine("// Validate ID matches URL")
 	if idType == "uuid" {
-		g.writeLine("if %s.ID.String() != id.String() {", receiverName)
+		g.writeLine("if %s.ID == nil || *%s.ID != id {", receiverName, receiverName)
 	} else {
 		// Ensure type compatibility for integer IDs by converting both to int64
 		g.writeLine("if int64(%s.ID) != id {", receiverName)
@@ -767,7 +767,11 @@ func (g *Generator) generateUpdateHandler(resource *ast.ResourceNode) {
 	g.writeLine("")
 
 	g.writeLine("// Set ID from URL")
-	g.writeLine("%s.ID = id", receiverName)
+	if idType == "uuid" {
+		g.writeLine("%s.ID = &id", receiverName)
+	} else {
+		g.writeLine("%s.ID = id", receiverName)
+	}
 	g.writeLine("")
 
 	g.writeLine("// Update %s (includes validation and hooks)", resourceLower)
