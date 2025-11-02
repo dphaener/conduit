@@ -236,8 +236,8 @@ func TestAcceptanceCriteria_ResourceGeneration(t *testing.T) {
 	}{
 		{"ID", "uuid.UUID"},
 		{"Email", "string"},
-		{"Bio", "sql.NullString"},
-		{"Age", "sql.NullInt64"},
+		{"Bio", "*string"},
+		{"Age", "*int64"},
 	}
 
 	for _, tt := range tests {

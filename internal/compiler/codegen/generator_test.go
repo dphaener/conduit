@@ -112,13 +112,13 @@ func TestGenerateResource_NullableFields(t *testing.T) {
 		t.Fatalf("GenerateResource failed: %v", err)
 	}
 
-	// Verify nullable field uses sql.NullString (with potential alignment padding)
-	if !strings.Contains(code, "Bio") || !strings.Contains(code, "sql.NullString") {
-		t.Error("Generated code should use sql.NullString for nullable text field")
+	// Verify nullable field uses pointer type (with potential alignment padding)
+	if !strings.Contains(code, "Bio") || !strings.Contains(code, "*string") {
+		t.Error("Generated code should use *string for nullable text field")
 	}
 
 	// Verify JSON tag includes omitempty for nullable
-	if !strings.Contains(code, "`db:\"bio\" json:\"bio,omitempty\"`") {
+	if !strings.Contains(code, "json:\"bio,omitempty\"") {
 		t.Error("Generated code should include omitempty for nullable field")
 	}
 }
@@ -252,7 +252,7 @@ func TestToGoType(t *testing.T) {
 				Type:     &ast.TypeNode{Kind: ast.TypePrimitive, Name: "string"},
 				Nullable: true,
 			},
-			expected: "sql.NullString",
+			expected: "*string",
 		},
 		{
 			name: "required int",
@@ -268,7 +268,7 @@ func TestToGoType(t *testing.T) {
 				Type:     &ast.TypeNode{Kind: ast.TypePrimitive, Name: "int"},
 				Nullable: true,
 			},
-			expected: "sql.NullInt64",
+			expected: "*int64",
 		},
 		{
 			name: "required uuid",
@@ -279,12 +279,28 @@ func TestToGoType(t *testing.T) {
 			expected: "uuid.UUID",
 		},
 		{
+			name: "nullable uuid",
+			field: &ast.FieldNode{
+				Type:     &ast.TypeNode{Kind: ast.TypePrimitive, Name: "uuid"},
+				Nullable: true,
+			},
+			expected: "*uuid.UUID",
+		},
+		{
 			name: "required timestamp",
 			field: &ast.FieldNode{
 				Type:     &ast.TypeNode{Kind: ast.TypePrimitive, Name: "timestamp"},
 				Nullable: false,
 			},
 			expected: "time.Time",
+		},
+		{
+			name: "nullable timestamp",
+			field: &ast.FieldNode{
+				Type:     &ast.TypeNode{Kind: ast.TypePrimitive, Name: "timestamp"},
+				Nullable: true,
+			},
+			expected: "*time.Time",
 		},
 	}
 

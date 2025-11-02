@@ -294,6 +294,10 @@ func (g *Generator) buildSelectQuery(resource *ast.ResourceNode) (columns, scanT
 
 		columnName := g.toDBColumnName(field.Name)
 		columns = append(columns, columnName)
+		// Note: For nullable fields (pointer types), scanTargets will be **T (pointer-to-pointer).
+		// The database/sql package handles this correctly:
+		// - NULL values: sets the pointer field to nil
+		// - Non-NULL values: allocates memory and sets the pointer field to point to the value
 		scanTargets = append(scanTargets, fmt.Sprintf("&%s.%s", receiverName, g.toGoFieldName(field.Name)))
 	}
 

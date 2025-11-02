@@ -489,7 +489,6 @@ func (g *Generator) generateUnary(un *ast.UnaryExpr) string {
 	switch un.Operator {
 	case "!":
 		// Unwrap operator in Conduit - in Go this is dereferencing for pointers
-		// or checking .Valid for sql.Null* types
 		// For simplicity, assume it's a force unwrap and generate a dereference
 		return fmt.Sprintf("*(%s)", operand)
 	case "-":
@@ -524,7 +523,6 @@ func (g *Generator) generateNullCoalesce(nc *ast.NullCoalesceExpr) string {
 	right := g.generateExpr(nc.Right)
 
 	// Generate null coalescing pattern in Go
-	// For sql.Null* types: if left.Valid { left.Type } else { right }
 	// For pointers: if left != nil { *left } else { right }
 	// For simplicity, generate a function-style expression
 

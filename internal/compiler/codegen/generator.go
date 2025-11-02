@@ -288,10 +288,8 @@ func (g *Generator) writeLine(format string, args ...interface{}) {
 
 // collectImports scans the resource and determines which imports are needed
 func (g *Generator) collectImports(resource *ast.ResourceNode) {
-	needsSQL := false
 	needsTime := false
 	needsUUID := false
-	needsContext := false
 
 	for _, field := range resource.Fields {
 		switch field.Type.Name {
@@ -300,22 +298,12 @@ func (g *Generator) collectImports(resource *ast.ResourceNode) {
 		case "uuid":
 			needsUUID = true
 		}
-
-		if field.Nullable && field.Type.Name != "bool" {
-			needsSQL = true
-		}
 	}
 
 	// CRUD operations always need context and database/sql
-	needsContext = true
-	needsSQL = true
+	g.imports["context"] = true
+	g.imports["database/sql"] = true
 
-	if needsContext {
-		g.imports["context"] = true
-	}
-	if needsSQL {
-		g.imports["database/sql"] = true
-	}
 	if needsTime {
 		g.imports["time"] = true
 	}
@@ -398,23 +386,10 @@ func (g *Generator) toGoType(field *ast.FieldNode) string {
 		goType = typeName
 	}
 
-	// Handle nullable fields
+	// Handle nullable fields - use pointer types for proper JSON serialization
+	// and simpler validation logic
 	if field.Nullable {
-		switch typeName {
-		case "string", "text", "markdown":
-			return "sql.NullString"
-		case "int":
-			return "sql.NullInt64"
-		case "float":
-			return "sql.NullFloat64"
-		case "bool":
-			return "sql.NullBool"
-		case "timestamp":
-			return "sql.NullTime"
-		default:
-			// For complex types, use pointers
-			return "*" + goType
-		}
+		return "*" + goType
 	}
 
 	return goType
