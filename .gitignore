@@ -7,6 +7,9 @@
 # Internal design documents (not for public consumption)
 .design/
 
+# Planning tickets (internal use only)
+tickets/
+
 # Compiled binaries
 /conduit
 *.exe
