@@ -181,6 +181,11 @@ func (s *System) Build(ctx context.Context) (*BuildResult, error) {
 		return result, nil
 	}
 
+	// Handle schema-based migration generation
+	if err := s.handleMigrations(compiled); err != nil {
+		return nil, fmt.Errorf("migration generation failed: %w", err)
+	}
+
 	// Generate Go code
 	generatedFiles, err := s.generateGoCode(compiled)
 	if err != nil {
@@ -287,6 +292,11 @@ func (s *System) IncrementalBuild(ctx context.Context, changedFiles []string) (*
 				compiled = append(compiled, cached)
 			}
 		}
+	}
+
+	// Handle schema-based migration generation
+	if err := s.handleMigrations(compiled); err != nil {
+		return nil, fmt.Errorf("migration generation failed: %w", err)
 	}
 
 	// Generate Go code for all files
@@ -762,4 +772,116 @@ type CompiledFile struct {
 	Path    string
 	Hash    string
 	Program *ast.Program
+}
+
+// handleMigrations manages schema-based migration generation
+func (s *System) handleMigrations(compiled []*CompiledFile) error {
+	// Extract current schemas from compiled AST
+	extractor := NewSchemaExtractor()
+	currentSchemas, err := extractor.ExtractSchemas(compiled)
+	if err != nil {
+		return fmt.Errorf("failed to extract schemas: %w", err)
+	}
+
+	// If no resources, nothing to do
+	if len(currentSchemas) == 0 {
+		return nil
+	}
+
+	// Load previous schema snapshot
+	snapshotManager := NewSnapshotManager(s.options.BuildDir)
+	previousSchemas, err := snapshotManager.Load()
+	if err != nil {
+		return fmt.Errorf("failed to load schema snapshot: %w", err)
+	}
+
+	// Initialize migration builder
+	migrationBuilder := NewMigrationBuilder()
+	migrationsDir := "migrations"
+
+	if previousSchemas == nil {
+		// First build: check if we should generate initial migration
+		shouldGenerate, err := migrationBuilder.ShouldGenerateInitialMigration(migrationsDir)
+		if err != nil {
+			return fmt.Errorf("failed to check initial migration status: %w", err)
+		}
+
+		if shouldGenerate {
+			// Generate initial 001_init.sql
+			initialSQL, err := migrationBuilder.GenerateInitialMigration(currentSchemas)
+			if err != nil {
+				return fmt.Errorf("failed to generate initial migration: %w", err)
+			}
+
+			// Write to migrations/001_init.sql
+			if err := os.MkdirAll(migrationsDir, 0755); err != nil {
+				return fmt.Errorf("failed to create migrations directory: %w", err)
+			}
+
+			initPath := filepath.Join(migrationsDir, "001_init.sql")
+			if err := os.WriteFile(initPath, []byte(initialSQL), 0644); err != nil {
+				return fmt.Errorf("failed to write initial migration: %w", err)
+			}
+
+			if s.options.Verbose {
+				fmt.Printf("Generated initial migration: %s\n", initPath)
+			} else {
+				fmt.Printf("✓ Generated initial migration: 001_init.sql\n")
+			}
+		}
+	} else {
+		// Subsequent build: generate versioned migration if schema changed
+		result, err := migrationBuilder.GenerateVersionedMigration(
+			previousSchemas,
+			currentSchemas,
+			migrationsDir,
+		)
+		if err != nil {
+			// DO NOT save snapshot if migration generation failed
+			return fmt.Errorf("failed to generate versioned migration: %w", err)
+		}
+
+		if result.MigrationGenerated {
+			// Report the generated migration
+			if s.options.Verbose {
+				fmt.Printf("Generated migration: %s\n", result.MigrationPath)
+				if result.Breaking {
+					fmt.Printf("  WARNING: Contains breaking changes\n")
+				}
+				if result.DataLoss {
+					fmt.Printf("  WARNING: May cause data loss\n")
+				}
+			} else {
+				warnings := ""
+				if result.Breaking {
+					warnings += " [BREAKING]"
+				}
+				if result.DataLoss {
+					warnings += " [DATA LOSS]"
+				}
+				fmt.Printf("✓ Generated migration: %s%s\n", filepath.Base(result.MigrationPath), warnings)
+			}
+		} else if s.options.Verbose {
+			fmt.Printf("No schema changes detected, skipping migration generation\n")
+		}
+	}
+
+	// Validate schemas before saving
+	for name, s := range currentSchemas {
+		if s.Name == "" {
+			return fmt.Errorf("invalid schema: missing name")
+		}
+		if name != s.Name {
+			return fmt.Errorf("schema name mismatch: key=%s, schema.Name=%s", name, s.Name)
+		}
+	}
+
+	// Save current schema snapshot for next build
+	// Only save after successful migration generation (or no migration needed)
+	timestamp := time.Now().Unix()
+	if err := snapshotManager.Save(currentSchemas, timestamp); err != nil {
+		return fmt.Errorf("failed to save schema snapshot: %w", err)
+	}
+
+	return nil
 }

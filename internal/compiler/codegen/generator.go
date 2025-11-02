@@ -57,12 +57,12 @@ func (g *Generator) GenerateProgram(prog *ast.Program, moduleName string, condui
 	}
 	files["main.go"] = mainCode
 
-	// Generate migrations
-	migrations, err := g.GenerateMigrations(prog.Resources)
-	if err != nil {
-		return nil, fmt.Errorf("failed to generate migrations: %w", err)
-	}
-	files["migrations/001_init.sql"] = migrations
+	// NOTE: Migration generation is now handled by the build system
+	// in internal/tooling/build/system.go:handleMigrations()
+	// This ensures:
+	// - First build generates 001_init.sql
+	// - Subsequent builds generate versioned migrations like {timestamp}_{seq}_{name}.sql
+	// - Schema changes are tracked via .conduit/schema-snapshot.json
 
 	// Generate introspection metadata
 	metaJSON, err := g.GenerateMetadata(prog)
