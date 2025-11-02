@@ -69,8 +69,12 @@ func (p *Parser) parseResource() *ResourceNode {
 		if p.check(lexer.TOKEN_AT) {
 			// Look ahead to determine what type of annotation this is
 			nextPos := p.current + 1
+			var nextTok lexer.Token
+			var nextLexeme string
+
 			if nextPos < len(p.tokens) {
-				nextTok := p.tokens[nextPos]
+				nextTok = p.tokens[nextPos]
+				nextLexeme = nextTok.Lexeme
 
 				// Parse hooks (@before, @after)
 				if nextTok.Type == lexer.TOKEN_BEFORE || nextTok.Type == lexer.TOKEN_AFTER {
@@ -89,13 +93,93 @@ func (p *Parser) parseResource() *ResourceNode {
 					}
 					continue
 				}
+
+				// Check for @has_many (TOKEN_HAS followed by underscore and "many")
+				if nextTok.Type == lexer.TOKEN_HAS && nextPos+1 < len(p.tokens) {
+					followingTok := p.tokens[nextPos+1]
+					if followingTok.Type == lexer.TOKEN_IDENTIFIER && followingTok.Lexeme == "many" {
+						nextLexeme = "has_many"
+					}
+				}
 			}
 
-			// Unknown annotation - skip it
-			p.addError(ParseError{
-				Message:  fmt.Sprintf("Unknown resource-level annotation: %s", p.peek().Lexeme),
-				Location: TokenToLocation(p.peek()),
-			})
+			// Provide helpful error messages for documented but unimplemented features
+			switch nextLexeme {
+			case "has_many":
+				p.addError(ParseError{
+					Message: "@has_many is not yet implemented.\n" +
+						"Workaround: Query related records manually in generated Go code or use raw SQL.\n" +
+						"Note: Query builder (Post.where) is also not yet implemented - see ROADMAP.md.\n" +
+						"Example: Use db.Query() or implement custom methods in your Go application.",
+					Location: TokenToLocation(p.peek()),
+				})
+			case "belongs_to":
+				p.addError(ParseError{
+					Message: "@belongs_to annotation form is not yet implemented.\n" +
+						"Workaround: Use inline relationship metadata:\n" +
+						"  author: User! {\n" +
+						"    foreign_key: \"author_id\"\n" +
+						"    on_delete: restrict\n" +
+						"  }\n" +
+						"See ROADMAP.md for implementation timeline.",
+					Location: TokenToLocation(p.peek()),
+				})
+			case "scope":
+				p.addError(ParseError{
+					Message: "@scope is not yet implemented.\n" +
+						"Workaround: Define query scopes in application code.\n" +
+						"See ROADMAP.md for implementation timeline.",
+					Location: TokenToLocation(p.peek()),
+				})
+			case "validate":
+				p.addError(ParseError{
+					Message: "@validate blocks are not yet implemented.\n" +
+						"Workaround: Implement validation in @before hooks or use field constraints.\n" +
+						"See ROADMAP.md for implementation timeline.",
+					Location: TokenToLocation(p.peek()),
+				})
+			case "invariant":
+				p.addError(ParseError{
+					Message: "@invariant is not yet implemented.\n" +
+						"Workaround: Use database CHECK constraints or validate in @before hooks.\n" +
+						"See ROADMAP.md for implementation timeline.",
+					Location: TokenToLocation(p.peek()),
+				})
+			case "computed":
+				p.addError(ParseError{
+					Message: "@computed fields are not yet implemented.\n" +
+						"Workaround: Implement computed logic in application code as helper methods.\n" +
+						"See ROADMAP.md for implementation timeline.",
+					Location: TokenToLocation(p.peek()),
+				})
+			case "function":
+				p.addError(ParseError{
+					Message: "@function definitions are not yet implemented.\n" +
+						"Workaround: Define logic inline in hooks or use built-in stdlib functions.\n" +
+						"See ROADMAP.md for implementation timeline.",
+					Location: TokenToLocation(p.peek()),
+				})
+			case "on":
+				p.addError(ParseError{
+					Message: "@on middleware annotations are not yet implemented.\n" +
+						"Workaround: Implement middleware in generated handler code manually.\n" +
+						"See ROADMAP.md for implementation timeline.",
+					Location: TokenToLocation(p.peek()),
+				})
+			case "nested":
+				p.addError(ParseError{
+					Message: "@nested resources are not yet implemented.\n" +
+						"Workaround: Use flat resource structure with foreign keys.\n" +
+						"See ROADMAP.md for implementation timeline.",
+					Location: TokenToLocation(p.peek()),
+				})
+			default:
+				// Unknown annotation - skip it
+				p.addError(ParseError{
+					Message:  fmt.Sprintf("Unknown resource-level annotation: @%s\n\nCheck LANGUAGE-SPEC.md for valid annotations or ROADMAP.md for planned features.", nextLexeme),
+					Location: TokenToLocation(p.peek()),
+				})
+			}
 			p.advance() // Skip @
 			p.skipUntilNewlineOrBrace()
 			continue

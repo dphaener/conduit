@@ -1,10 +1,12 @@
 # Getting Started with Conduit
 
 **Version:** 1.0
-**Status:** Quick Start Guide
-**Updated:** 2025-10-13
+**Status:** Quick Start Guide (Updated for v0.1.0)
+**Updated:** 2025-11-02
 
-This guide will walk you through installing Conduit, creating your first application, and understanding the core concepts.
+⚠️ **IMPORTANT:** This guide only includes features that work today. For planned features, see [ROADMAP.md](ROADMAP.md).
+
+This guide will walk you through installing Conduit, creating your first application, and understanding the core concepts that are currently implemented.
 
 ---
 
@@ -390,11 +392,8 @@ resource User {
   created_at: timestamp! @auto
   updated_at: timestamp! @auto_update
 
-  // Relationships
-  @has_many Post as "posts" {
-    foreign_key: "author_id"
-    on_delete: cascade
-  }
+  // Note: @has_many is not yet implemented
+  // For now, use: Post.where(author_id: user.id)
 }
 ```
 
@@ -522,9 +521,9 @@ resource Post {
 
   // Update slug if title changes
   @before update {
-    if self.title_changed? {
-      self.slug = String.slugify(self.title)
-    }
+    // Note: Change tracking uses Go methods (TitleChanged(), PreviousTitle())
+    // Ruby-style syntax (title_changed?) is not yet supported in hooks
+    self.slug = String.slugify(self.title)
   }
 }
 ```
@@ -532,7 +531,7 @@ resource Post {
 **What's happening:**
 - `@before create` runs before inserting into database
 - `String.slugify()` is a built-in function (namespaced to prevent ambiguity)
-- `self.title_changed?` checks if the field was modified
+- Change tracking methods are available in generated Go code but not yet in hook DSL
 
 ### 2. Add published_at timestamp
 
@@ -577,8 +576,8 @@ resource Post {
 
 **What's happening:**
 - `@transaction` ensures hook runs in database transaction
-- `@async` queues work to run after response is sent
-- `rescue |err|` catches errors without failing the request
+- `@async` queues work to run after response is sent (generates Go goroutines)
+- Note: `rescue |err|` error handling syntax is not yet implemented in hooks
 
 ---
 
@@ -596,61 +595,52 @@ age: int! @min(18) @max(120)
 
 ### 2. Procedural validation
 
-For complex logic that can't be expressed declaratively:
+⚠️ **Not Yet Implemented** - See [ROADMAP.md](ROADMAP.md#validate---procedural-validation)
 
 ```conduit
-resource Post {
-  // ... fields ...
-
-  @validate {
-    // Custom validation logic
-    if self.status == "published" && String.length(self.content) < 500 {
-      error("Published posts must have at least 500 characters")
-    }
-
-    // Multi-field validation
-    if self.scheduled_for != nil && self.scheduled_for! <= Time.now() {
-      error("Scheduled date must be in the future")
-    }
-  }
-}
+# This syntax does not work yet
+# @validate {
+#   if self.status == "published" && String.length(self.content) < 500 {
+#     error("Published posts must have at least 500 characters")
+#   }
+# }
 ```
+
+**Current Workaround:** Use field constraints or implement validation in generated Go code.
 
 ### 3. Declarative constraints (reusable)
 
+⚠️ **Partially Implemented** - Syntax is parsed but constraints are not executed yet
+
 ```conduit
 resource Post {
   // ... fields ...
 
+  # These are parsed but do NOT run yet
   @constraint published_requires_content {
     on: [create, update]
     when: self.status == "published"
     condition: String.length(self.content) >= 500
     error: "Published posts must have at least 500 characters"
   }
-
-  @constraint unique_slug_when_published {
-    on: [create, update]
-    when: self.status == "published"
-    condition: !Post.exists?(slug: self.slug, status: "published", id_not: self.id)
-    error: "A published post with this slug already exists"
-  }
 }
 ```
+
+**Current Workaround:** Implement constraint logic in `@before` hooks.
 
 ### 4. Runtime invariants (always checked)
 
-```conduit
-resource Post {
-  view_count: int! @default(0)
-  like_count: int! @default(0)
+❌ **Not Implemented** - See [ROADMAP.md](ROADMAP.md#invariant---runtime-invariants)
 
-  @invariant metrics_non_negative {
-    condition: self.view_count >= 0 && self.like_count >= 0
-    error: "Metrics cannot be negative"
-  }
-}
+```conduit
+# This syntax does not work
+# @invariant metrics_non_negative {
+#   condition: self.view_count >= 0 && self.like_count >= 0
+#   error: "Metrics cannot be negative"
+# }
 ```
+
+**Current Workaround:** Use database CHECK constraints or validation in application code.
 
 ---
 
@@ -732,48 +722,9 @@ Create `.vscode/launch.json`:
 
 ### Running Tests
 
-**1. Create test file (`tests/post_test.cdt`):**
+❌ **Not Yet Implemented** - The testing framework is not available. See [ROADMAP.md](ROADMAP.md#testing-framework)
 
-```conduit
-@test "Creating a post" {
-  let user = User.create!({
-    username: "testuser",
-    email: "test@example.com",
-    full_name: "Test User"
-  })
-
-  let post = Post.create!({
-    title: "Test Post",
-    content: "This is a test post with enough content to pass validation...",
-    author_id: user.id
-  })
-
-  assert_not_nil(post.id)
-  assert_equal(post.slug, "test-post")
-  assert_equal(post.status, "draft")
-}
-
-@test "Publishing a post sets published_at" {
-  let post = create_test_post()
-
-  Post.update!(post.id, { status: "published" })
-
-  let updated = Post.find!(post.id)
-  assert_not_nil(updated.published_at)
-}
-```
-
-**2. Run tests:**
-
-```bash
-conduit test
-
-# Run specific test file
-conduit test tests/post_test.cdt
-
-# Run with coverage
-conduit test --coverage
-```
+**Current Workaround:** Write integration tests in Go using the generated code.
 
 ---
 
@@ -787,11 +738,16 @@ conduit test --coverage
 - **IMPLEMENTATION-*.md** - Deep dives into each subsystem
 
 **Key concepts to explore:**
-- Query scopes (reusable queries)
-- Computed fields (derived values)
-- Nested resources (RESTful nesting)
-- Middleware (auth, rate limiting, caching)
-- Custom functions (reusable logic)
+- Lifecycle hooks (before/after operations) ✅ **Works Today**
+- Field constraints and relationships ✅ **Works Today**
+- Type system and nullability ✅ **Works Today**
+
+**Planned for future (not yet working):**
+- Query scopes (reusable queries) - See [ROADMAP.md](ROADMAP.md)
+- Computed fields (derived values) - See [ROADMAP.md](ROADMAP.md)
+- Nested resources (RESTful nesting) - See [ROADMAP.md](ROADMAP.md)
+- Middleware (auth, rate limiting, caching) - See [ROADMAP.md](ROADMAP.md)
+- Custom functions (reusable logic) - See [ROADMAP.md](ROADMAP.md)
 
 ### 2. Build a Real Application
 
@@ -820,48 +776,15 @@ conduit test --coverage
 
 **Introspection API:**
 
-Query your schema programmatically:
+⚠️ **Partially Implemented** - Basic introspection exists but is limited.
 
-```bash
-curl -X POST http://localhost:3000/introspect \
-  -H "Content-Type: application/json" \
-  -d '{
-    "query": "what resources exist?"
-  }'
-```
+**GraphQL API:**
 
-**Pattern Discovery:**
+❌ **Not Implemented** - Planned for v1.1+. See [ROADMAP.md](ROADMAP.md)
 
-```bash
-curl -X POST http://localhost:3000/introspect \
-  -H "Content-Type: application/json" \
-  -d '{
-    "query": "how do I add authentication to a handler?"
-  }'
-```
+**Background Jobs:**
 
-**GraphQL API (v1.1+):**
-
-```conduit
-@graphql
-resource Post {
-  // Automatically generates GraphQL schema
-}
-```
-
-**Background Jobs (v1.2+):**
-
-```conduit
-@job process_payment(order_id: uuid) {
-  let order = Order.find!(order_id)
-  // Process payment...
-}
-
-// Queue job
-@after create {
-  Jobs.enqueue(:process_payment, order_id: self.id)
-}
-```
+❌ **Not Implemented** - Planned for v1.2+. See [ROADMAP.md](ROADMAP.md)
 
 ### 4. Deploy to Production
 
@@ -1057,8 +980,9 @@ field: {
 
 ### Common Annotations
 
+**✅ Working Today:**
 ```conduit
-// Field
+// Field constraints
 @primary        // Primary key
 @auto           // Auto-generate value
 @auto_update    // Auto-update timestamp
@@ -1066,55 +990,55 @@ field: {
 @min(n)         // Minimum value/length
 @max(n)         // Maximum value/length
 @default(val)   // Default value
-@pattern(regex) // Regex pattern
 
-// Resource
-@has_many Resource as "field"
-@nested under Parent as "collection"
-
-// Hooks
+// Lifecycle hooks
 @before create/update/delete/save
 @after create/update/delete/save
-@transaction    // Run in transaction
-@async          // Run asynchronously
+```
 
-// Validation
-@validate { }   // Procedural validation
-@constraint name { }  // Declarative constraint
-@invariant name { }   // Runtime invariant
+**⚠️ Parsed but Not Functional:**
+```conduit
+@constraint name { }  // Parsed, not executed
+```
 
-// Middleware
-@on operation: [middleware_list]
-
-// Scopes
-@scope name { }  // Reusable query scope
-
-// Functions
-@function name(params) -> return_type { }
-
-// Computed fields
-@computed name: type { }
+**❌ Not Yet Implemented:**
+```conduit
+@has_many Resource as "field"     // See ROADMAP.md
+@validate { }                      // See ROADMAP.md
+@invariant name { }                // See ROADMAP.md
+@scope name { }                    // See ROADMAP.md
+@function name(params) -> type { } // See ROADMAP.md
+@computed name: type { }           // See ROADMAP.md
+@on operation: [middleware]        // See ROADMAP.md
+@nested under Parent              // See ROADMAP.md
 ```
 
 ### Standard Library Namespaces
 
+**✅ Implemented (15 MVP functions):**
 ```conduit
-String.*        // String operations
-Time.*          // Time/date operations
-Array.*         // Array operations
-Hash.*          // Hash operations
-Number.*        // Number operations
-UUID.*          // UUID operations
-Random.*        // Random generation
-Crypto.*        // Cryptography
-HTML.*          // HTML utilities
-JSON.*          // JSON operations
-Regex.*         // Regex operations
-Logger.*        // Logging
-Cache.*         // Caching
-Context.*       // Request context
-Env.*           // Environment variables
+String.*        // length, slugify, upcase, downcase, trim, contains, replace
+Time.*          // now, format, parse
+Array.*         // length, contains
+UUID.*          // generate, validate
+Random.*        // int
 ```
+
+**❌ Not Yet Implemented:**
+```conduit
+Number.*        // All functions - See ROADMAP.md
+Hash.*          // All functions - See ROADMAP.md
+Crypto.*        // All functions - See ROADMAP.md
+HTML.*          // All functions - See ROADMAP.md
+JSON.*          // All functions - See ROADMAP.md
+Regex.*         // All functions - See ROADMAP.md
+Logger.*        // All functions - See ROADMAP.md
+Cache.*         // All functions - See ROADMAP.md
+Context.*       // All functions - See ROADMAP.md
+Env.*           // All functions - See ROADMAP.md
+```
+
+For complete list, see [ROADMAP.md](ROADMAP.md#standard-library---missing-functions)
 
 ---
 
