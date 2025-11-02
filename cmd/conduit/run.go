@@ -18,11 +18,13 @@ import (
 var (
 	runPort             int
 	requireMigrations   bool
+	autoMigrate         string
 )
 
 func init() {
 	runCmd.Flags().IntVar(&runPort, "port", 3000, "Port to run the server on")
 	runCmd.Flags().BoolVar(&requireMigrations, "require-migrations", false, "Block startup if migrations are pending")
+	runCmd.Flags().StringVar(&autoMigrate, "auto-migrate", "", "Automatically apply migrations before startup (use 'dry-run' to preview)")
 }
 
 var runCmd = &cobra.Command{
@@ -146,6 +148,29 @@ var runCmd = &cobra.Command{
 		// Check if binary exists
 		if _, err := os.Stat(opts.OutputPath); os.IsNotExist(err) {
 			return fmt.Errorf("%s not found - build may have failed", opts.OutputPath)
+		}
+
+		// Handle auto-migrate if requested
+		if autoMigrate != "" {
+			mode := build.AutoMigrateApply
+			if autoMigrate == "dry-run" {
+				mode = build.AutoMigrateDryRun
+			} else if autoMigrate != "true" && autoMigrate != "1" {
+				return fmt.Errorf("invalid --auto-migrate value: %s (use 'dry-run' or leave empty)", autoMigrate)
+			}
+
+			migrator := build.NewAutoMigrator(build.AutoMigrateOptions{
+				Mode: mode,
+			})
+
+			if err := migrator.Run(); err != nil {
+				return fmt.Errorf("auto-migrate failed: %w", err)
+			}
+
+			// If dry-run, don't start the server
+			if mode == build.AutoMigrateDryRun {
+				return nil
+			}
 		}
 
 		// Check migration status before starting server

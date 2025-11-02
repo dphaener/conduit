@@ -22,6 +22,7 @@ var (
 	runHotReload        bool
 	runBuildFirst       bool
 	requireMigrations   bool
+	autoMigrate         string
 )
 
 // NewRunCommand creates the run command
@@ -48,6 +49,7 @@ Examples:
 	cmd.Flags().BoolVar(&runHotReload, "hot-reload", false, "Enable hot reload on file changes (stub)")
 	cmd.Flags().BoolVar(&runBuildFirst, "build", true, "Build before running")
 	cmd.Flags().BoolVar(&requireMigrations, "require-migrations", false, "Block startup if migrations are pending")
+	cmd.Flags().StringVar(&autoMigrate, "auto-migrate", "", "Automatically apply migrations before startup (use 'dry-run' to preview)")
 
 	return cmd
 }
@@ -89,6 +91,29 @@ func runRun(cmd *cobra.Command, args []string) error {
 	// Check if binary exists
 	if _, err := os.Stat(outputPath); os.IsNotExist(err) {
 		return fmt.Errorf("%s not found - build may have failed", outputPath)
+	}
+
+	// Handle auto-migrate if requested
+	if autoMigrate != "" {
+		mode := build.AutoMigrateApply
+		if autoMigrate == "dry-run" {
+			mode = build.AutoMigrateDryRun
+		} else if autoMigrate != "true" && autoMigrate != "1" {
+			return fmt.Errorf("invalid --auto-migrate value: %s (use 'dry-run' or leave empty)", autoMigrate)
+		}
+
+		migrator := build.NewAutoMigrator(build.AutoMigrateOptions{
+			Mode: mode,
+		})
+
+		if err := migrator.Run(); err != nil {
+			return fmt.Errorf("auto-migrate failed: %w", err)
+		}
+
+		// If dry-run, don't start the server
+		if mode == build.AutoMigrateDryRun {
+			return nil
+		}
 	}
 
 	// Check migration status before starting server

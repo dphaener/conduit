@@ -26,6 +26,12 @@ func (r *Runner) Initialize() error {
 	return r.tracker.Initialize()
 }
 
+// RecordMigration records a migration in a transaction
+// This method exposes the tracker's Record method for external callers
+func (r *Runner) RecordMigration(tx *sql.Tx, m *Migration) error {
+	return r.tracker.Record(tx, m)
+}
+
 // MigrateUp applies all pending migrations
 func (r *Runner) MigrateUp(migrations []*Migration) error {
 	pending, err := r.tracker.GetPending(migrations)
