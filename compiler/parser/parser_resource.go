@@ -2,6 +2,8 @@ package parser
 
 import (
 	"fmt"
+	"strings"
+
 	"github.com/conduit-lang/conduit/compiler/lexer"
 )
 
@@ -13,8 +15,12 @@ import (
 func (p *Parser) parseResource() *ResourceNode {
 	p.skipNewlines()
 
-	// Get documentation before 'resource' keyword
-	doc := p.parseDocumentation()
+	// Collect leading comments before resource
+	leadingComment := p.collectLeadingComments()
+
+	// Note: Documentation (///) is not currently used in Conduit
+	// All comments use # syntax and are captured as LeadingComment
+	doc := ""
 
 	// Consume 'resource' keyword
 	resourceToken, ok := p.consume(lexer.TOKEN_RESOURCE, "Expected 'resource' keyword")
@@ -31,6 +37,7 @@ func (p *Parser) parseResource() *ResourceNode {
 
 	// Create resource node
 	resource := NewResourceNode(name, doc, TokenToLocation(resourceToken))
+	resource.LeadingComment = leadingComment
 
 	// Consume opening brace
 	if _, ok := p.consume(lexer.TOKEN_LBRACE, "Expected '{' after resource name"); !ok {
@@ -51,12 +58,46 @@ func (p *Parser) parseResource() *ResourceNode {
 			break
 		}
 
+		// Skip comments - they'll be collected by the next field/relationship/hook
+		if p.check(lexer.TOKEN_COMMENT) {
+			p.advance()
+			continue
+		}
+
 		// Check for resource-level annotations starting with @
-		// Examples: @before create { }, @constraint name { }, @deprecated
+		// Examples: @before create { }, @constraint name { }, @after delete { }
 		if p.check(lexer.TOKEN_AT) {
-			// Future: parse hooks, constraints, etc.
-			// For now, skip these including their block bodies
-			p.skipResourceLevelAnnotation()
+			// Look ahead to determine what type of annotation this is
+			nextPos := p.current + 1
+			if nextPos < len(p.tokens) {
+				nextTok := p.tokens[nextPos]
+
+				// Parse hooks (@before, @after)
+				if nextTok.Type == lexer.TOKEN_BEFORE || nextTok.Type == lexer.TOKEN_AFTER {
+					hook := p.parseHook()
+					if hook != nil {
+						resource.AddHook(hook)
+					}
+					continue
+				}
+
+				// Parse custom constraints (@constraint)
+				if nextTok.Type == lexer.TOKEN_CONSTRAINT {
+					constraint := p.parseCustomConstraint()
+					if constraint != nil {
+						resource.AddCustomConstraint(constraint)
+					}
+					continue
+				}
+			}
+
+			// Unknown annotation - skip it
+			p.addError(ParseError{
+				Message:  fmt.Sprintf("Unknown resource-level annotation: %s", p.peek().Lexeme),
+				Location: TokenToLocation(p.peek()),
+			})
+			p.advance() // Skip @
+			p.skipUntilNewlineOrBrace()
 			continue
 		}
 
@@ -101,6 +142,9 @@ func (p *Parser) parseResource() *ResourceNode {
 // parseFieldOrRelationship parses a field or relationship definition
 // This determines if it's a field or relationship based on the type
 func (p *Parser) parseFieldOrRelationship(resource *ResourceNode) *FieldNode {
+	// Collect any leading comments before the field
+	leadingComment := p.collectLeadingComments()
+
 	fieldStart := p.peek()
 
 	// Get field name
@@ -161,6 +205,9 @@ func (p *Parser) parseFieldOrRelationship(resource *ResourceNode) *FieldNode {
 	if fieldType.IsResource() {
 		rel := p.parseRelationshipMetadata(name, fieldType.Name, nullable, fieldStart)
 		if rel != nil {
+			rel.LeadingComment = leadingComment
+			// Check for trailing comment
+			rel.TrailingComment = p.consumeTrailingComment()
 			resource.AddRelationship(rel)
 		}
 		return nil
@@ -168,6 +215,7 @@ func (p *Parser) parseFieldOrRelationship(resource *ResourceNode) *FieldNode {
 
 	// Create field node
 	field := NewFieldNode(name, fieldType, nullable, TokenToLocation(fieldStart))
+	field.LeadingComment = leadingComment
 
 	// Parse field constraints
 	for p.check(lexer.TOKEN_AT) {
@@ -188,6 +236,9 @@ func (p *Parser) parseFieldOrRelationship(resource *ResourceNode) *FieldNode {
 			field.AddConstraint(constraint)
 		}
 	}
+
+	// Check for trailing comment before newline
+	field.TrailingComment = p.consumeTrailingComment()
 
 	// Add field to resource
 	resource.AddField(field)
@@ -398,37 +449,293 @@ func (p *Parser) skipUntilNewlineOrBrace() {
 	p.skipNewlines()
 }
 
-// skipResourceLevelAnnotation skips resource-level annotations that may include blocks
-// Examples: @before create { ... }, @constraint name { ... }, @deprecated
-func (p *Parser) skipResourceLevelAnnotation() {
-	// Consume the @ token (already checked by caller)
+// parseHook parses a resource-level hook (@before or @after)
+// @before create { body content }
+// @after update { body content }
+func (p *Parser) parseHook() *HookNode {
+	hookStart := p.peek()
+
+	// Consume @ token (already checked by caller)
 	p.advance()
 
-	// Consume annotation name/identifier(s) until we hit a brace, newline, or closing resource brace
-	maxIter := 1000
-	iter := 0
-	for !p.isAtEnd() && !p.check(lexer.TOKEN_LBRACE) && !p.check(lexer.TOKEN_NEWLINE) && !p.check(lexer.TOKEN_RBRACE) && iter < maxIter {
-		iter++
+	// Get hook type (before or after)
+	var hookType string
+	if p.match(lexer.TOKEN_BEFORE) {
+		hookType = "before"
+	} else if p.match(lexer.TOKEN_AFTER) {
+		hookType = "after"
+	} else {
+		p.addError(ParseError{
+			Message:  "Expected 'before' or 'after' after '@'",
+			Location: TokenToLocation(p.peek()),
+		})
+		return nil
+	}
+
+	// Get trigger (e.g., "create", "update", "delete")
+	// The trigger can be an identifier or one of the operation keywords
+	trigger := ""
+	if p.check(lexer.TOKEN_IDENTIFIER) {
+		trigger = p.advance().Lexeme
+	} else if p.check(lexer.TOKEN_CREATE) {
+		trigger = "create"
 		p.advance()
+	} else if p.check(lexer.TOKEN_UPDATE) {
+		trigger = "update"
+		p.advance()
+	} else if p.check(lexer.TOKEN_DELETE) {
+		trigger = "delete"
+		p.advance()
+	} else if p.check(lexer.TOKEN_SAVE) {
+		trigger = "save"
+		p.advance()
+	} else {
+		p.addError(ParseError{
+			Message:  fmt.Sprintf("Expected trigger name after '@%s'", hookType),
+			Location: TokenToLocation(p.peek()),
+		})
+		return nil
+	}
+
+	// Skip newlines before block
+	p.skipNewlines()
+
+	// Consume opening brace and save its position for body extraction
+	openBracePos := -1
+	if p.match(lexer.TOKEN_LBRACE) {
+		// Save the end position of the opening brace for offset-based extraction
+		if p.current > 0 {
+			openBracePos = p.tokens[p.current-1].End
+		}
+	} else {
+		p.addError(ParseError{
+			Message:  fmt.Sprintf("Expected '{' after '@%s %s'", hookType, trigger),
+			Location: TokenToLocation(p.peek()),
+		})
+		return nil
+	}
+
+	// Capture body as raw string
+	body := p.captureBlockBodyFrom(openBracePos)
+
+	// Consume closing brace (already consumed by captureBlockBody)
+
+	p.skipNewlines()
+
+	return NewHookNode(hookType, trigger, body, TokenToLocation(hookStart))
+}
+
+// parseCustomConstraint parses a resource-level custom constraint
+// @constraint name { body content }
+func (p *Parser) parseCustomConstraint() *CustomConstraintNode {
+	constraintStart := p.peek()
+
+	// Consume @ token (already checked by caller)
+	p.advance()
+
+	// Consume 'constraint' keyword
+	if !p.match(lexer.TOKEN_CONSTRAINT) {
+		p.addError(ParseError{
+			Message:  "Expected 'constraint' after '@'",
+			Location: TokenToLocation(p.peek()),
+		})
+		return nil
+	}
+
+	// Get constraint name
+	name := ""
+	if p.check(lexer.TOKEN_IDENTIFIER) {
+		name = p.advance().Lexeme
+	} else {
+		p.addError(ParseError{
+			Message:  "Expected constraint name after '@constraint'",
+			Location: TokenToLocation(p.peek()),
+		})
+		return nil
+	}
+
+	// Skip newlines before block
+	p.skipNewlines()
+
+	// Consume opening brace and save its position for body extraction
+	openBracePos := -1
+	if p.match(lexer.TOKEN_LBRACE) {
+		// Save the end position of the opening brace for offset-based extraction
+		if p.current > 0 {
+			openBracePos = p.tokens[p.current-1].End
+		}
+	} else {
+		p.addError(ParseError{
+			Message:  fmt.Sprintf("Expected '{' after '@constraint %s'", name),
+			Location: TokenToLocation(p.peek()),
+		})
+		return nil
+	}
+
+	// Capture body as raw string
+	body := p.captureBlockBodyFrom(openBracePos)
+
+	// Consume closing brace (already consumed by captureBlockBody)
+
+	p.skipNewlines()
+
+	return NewCustomConstraintNode(name, body, TokenToLocation(constraintStart))
+}
+
+// captureBlockBody captures the raw content of a block as a string
+// Assumes opening brace has been consumed
+// Consumes tokens up to and including the closing brace
+func (p *Parser) captureBlockBody() string {
+	return p.captureBlockBodyFrom(-1)
+}
+
+// captureBlockBodyFrom captures block body starting from the given source position
+// If startPos is -1, uses the current token's start position
+// Consumes tokens up to and including the closing brace
+func (p *Parser) captureBlockBodyFrom(startPos int) string {
+	// If we have source text available, use offset-based extraction to preserve formatting
+	if p.source != "" {
+		return p.captureBlockBodyWithOffsets(startPos)
+	}
+
+	// Fallback to token-based reconstruction if source is not available
+	return p.captureBlockBodyFromTokens()
+}
+
+// captureBlockBodyWithOffsets extracts the block body directly from source text
+// preserving all original formatting including indentation
+// startPos is the position in source to start extracting from (typically end of opening brace)
+// If startPos is -1, uses the current token's start position
+func (p *Parser) captureBlockBodyWithOffsets(startPos int) string {
+	// Use provided start position or default to current token's start
+	if startPos == -1 {
+		startPos = p.peek().Start
+	}
+
+	depth := 1
+	maxIter := 10000
+	iter := 0
+	var endTok lexer.Token
+
+	for !p.isAtEnd() && depth > 0 && iter < maxIter {
+		iter++
+		tok := p.peek()
+
+		if tok.Type == lexer.TOKEN_LBRACE {
+			depth++
+			p.advance()
+		} else if tok.Type == lexer.TOKEN_RBRACE {
+			depth--
+			if depth == 0 {
+				endTok = tok
+			}
+			p.advance()
+		} else {
+			endTok = tok
+			p.advance()
+		}
 	}
 
 	if iter >= maxIter {
 		p.addError(ParseError{
-			Message:  "Infinite loop in skipResourceLevelAnnotation",
+			Message:  "Infinite loop detected while capturing block body",
 			Location: TokenToLocation(p.peek()),
 		})
-		return
+		return ""
 	}
 
-	// Skip any newlines before checking for block
-	p.skipNewlines()
-
-	// If followed by a block, skip the entire balanced block
-	if p.check(lexer.TOKEN_LBRACE) {
-		p.skipBalancedBlock()
+	// Extract the substring from source using offsets
+	// Extract from startPos to the start of the closing brace to preserve formatting
+	if startPos < endTok.Start && endTok.Start <= len(p.source) {
+		body := p.source[startPos:endTok.Start]
+		// Trim trailing whitespace and single leading newline (from opening brace line)
+		body = strings.TrimRight(body, " \t\n\r")
+		// Remove single leading newline if present (common after opening brace)
+		if len(body) > 0 && body[0] == '\n' {
+			body = body[1:]
+		}
+		return body
 	}
 
-	p.skipNewlines()
+	return ""
+}
+
+// captureBlockBodyFromTokens reconstructs body from tokens (fallback for when source is unavailable)
+func (p *Parser) captureBlockBodyFromTokens() string {
+	var bodyTokens []lexer.Token
+	depth := 1
+	maxIter := 10000
+	iter := 0
+
+	for !p.isAtEnd() && depth > 0 && iter < maxIter {
+		iter++
+		tok := p.peek()
+
+		if tok.Type == lexer.TOKEN_LBRACE {
+			depth++
+			bodyTokens = append(bodyTokens, tok)
+			p.advance()
+		} else if tok.Type == lexer.TOKEN_RBRACE {
+			depth--
+			if depth > 0 {
+				bodyTokens = append(bodyTokens, tok)
+			}
+			p.advance()
+		} else {
+			bodyTokens = append(bodyTokens, tok)
+			p.advance()
+		}
+	}
+
+	if iter >= maxIter {
+		p.addError(ParseError{
+			Message:  "Infinite loop detected while capturing block body",
+			Location: TokenToLocation(p.peek()),
+		})
+		return ""
+	}
+
+	// Reconstruct body from tokens
+	var body strings.Builder
+	for i, tok := range bodyTokens {
+		// Add the token lexeme
+		body.WriteString(tok.Lexeme)
+
+		// Add spacing between tokens where appropriate
+		if i < len(bodyTokens)-1 {
+			nextTok := bodyTokens[i+1]
+
+			// Add newline if this token is a newline
+			if tok.Type == lexer.TOKEN_NEWLINE {
+				// Newline already in lexeme
+				continue
+			}
+
+			// Add space between most tokens (but not before/after certain punctuation)
+			if !isNoSpaceAfter(tok.Type) && !isNoSpaceBefore(nextTok.Type) {
+				body.WriteString(" ")
+			}
+		}
+	}
+
+	return strings.TrimSpace(body.String())
+}
+
+// isNoSpaceAfter returns true if no space should be added after this token type
+func isNoSpaceAfter(tokenType lexer.TokenType) bool {
+	return tokenType == lexer.TOKEN_LPAREN ||
+		tokenType == lexer.TOKEN_LBRACKET ||
+		tokenType == lexer.TOKEN_DOT ||
+		tokenType == lexer.TOKEN_NEWLINE
+}
+
+// isNoSpaceBefore returns true if no space should be added before this token type
+func isNoSpaceBefore(tokenType lexer.TokenType) bool {
+	return tokenType == lexer.TOKEN_RPAREN ||
+		tokenType == lexer.TOKEN_RBRACKET ||
+		tokenType == lexer.TOKEN_COMMA ||
+		tokenType == lexer.TOKEN_DOT ||
+		tokenType == lexer.TOKEN_NEWLINE
 }
 
 // skipBalancedBlock skips a balanced block delimited by braces { ... }

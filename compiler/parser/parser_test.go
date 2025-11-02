@@ -607,3 +607,145 @@ resource Comment {
 		}
 	}
 }
+
+// TestParser_HooksAndConstraints tests parsing of resource-level hooks and constraints
+// This is a regression test for the bug where consumeTrailingComment() was consuming
+// tokens from subsequent fields, causing the parser to fail on hooks and constraints.
+func TestParser_HooksAndConstraints(t *testing.T) {
+	source := `
+resource Post {
+  id        : uuid! @primary @auto
+  title     : string! @min(5) @max(200)
+  slug      : string! @unique
+  content   : text! @min(100)
+  published : bool! @default(false)
+  author_id : uuid!
+  created_at: timestamp! @auto
+  updated_at: timestamp! @auto_update
+
+  author    : User! {
+    foreign_key: "author_id"
+    on_delete: restrict
+  }
+
+  @before create {
+    self.slug = String.slugify(self.title)
+  }
+
+  @constraint published_requires_content {
+    on: [create, update]
+    when: self.published == true
+    condition: String.length(self.content) >= 500
+    error: "Published posts must have at least 500 characters"
+  }
+}
+`
+
+	program, errors := parseSource(t, source)
+
+	if len(errors) > 0 {
+		t.Fatalf("Expected no errors, got: %v", errors)
+	}
+
+	if len(program.Resources) != 1 {
+		t.Fatalf("Expected 1 resource, got %d", len(program.Resources))
+	}
+
+	resource := program.Resources[0]
+	if resource.Name != "Post" {
+		t.Errorf("Expected resource name 'Post', got '%s'", resource.Name)
+	}
+
+	// Verify all fields were parsed
+	if len(resource.Fields) != 8 {
+		t.Fatalf("Expected 8 fields, got %d", len(resource.Fields))
+	}
+
+	// Verify relationship was parsed
+	if len(resource.Relationships) != 1 {
+		t.Fatalf("Expected 1 relationship, got %d", len(resource.Relationships))
+	}
+
+	// Verify hook was parsed
+	if len(resource.Hooks) != 1 {
+		t.Fatalf("Expected 1 hook, got %d", len(resource.Hooks))
+	}
+
+	hook := resource.Hooks[0]
+	if hook.Type != "before" {
+		t.Errorf("Expected hook type 'before', got '%s'", hook.Type)
+	}
+	if hook.Trigger != "create" {
+		t.Errorf("Expected hook trigger 'create', got '%s'", hook.Trigger)
+	}
+	if hook.Body == "" {
+		t.Error("Expected hook body to be non-empty")
+	}
+
+	// Verify custom constraint was parsed
+	if len(resource.Constraints) != 1 {
+		t.Fatalf("Expected 1 custom constraint, got %d", len(resource.Constraints))
+	}
+
+	constraint := resource.Constraints[0]
+	if constraint.Name != "published_requires_content" {
+		t.Errorf("Expected constraint name 'published_requires_content', got '%s'", constraint.Name)
+	}
+	if constraint.Body == "" {
+		t.Error("Expected constraint body to be non-empty")
+	}
+}
+
+// TestParser_MultipleFieldsWithConstraints tests that multiple fields with constraints
+// are parsed correctly without consuming tokens from subsequent fields.
+func TestParser_MultipleFieldsWithConstraints(t *testing.T) {
+	source := `
+resource User {
+  id: uuid! @primary @auto
+  username: string! @min(3) @max(50)
+  email: string! @unique
+  age: int?
+}
+`
+
+	program, errors := parseSource(t, source)
+
+	if len(errors) > 0 {
+		t.Fatalf("Expected no errors, got: %v", errors)
+	}
+
+	resource := program.Resources[0]
+	
+	// All 4 fields should be parsed
+	if len(resource.Fields) != 4 {
+		t.Fatalf("Expected 4 fields, got %d", len(resource.Fields))
+	}
+
+	// Check field names
+	expectedFields := []string{"id", "username", "email", "age"}
+	for i, expectedName := range expectedFields {
+		if resource.Fields[i].Name != expectedName {
+			t.Errorf("Field %d: expected name '%s', got '%s'", i, expectedName, resource.Fields[i].Name)
+		}
+	}
+
+	// Check constraints on id field
+	if len(resource.Fields[0].Constraints) != 2 {
+		t.Errorf("Expected id field to have 2 constraints, got %d", len(resource.Fields[0].Constraints))
+	}
+
+	// Check constraints on username field
+	if len(resource.Fields[1].Constraints) != 2 {
+		t.Errorf("Expected username field to have 2 constraints, got %d", len(resource.Fields[1].Constraints))
+	}
+
+	// Check constraints on email field
+	if len(resource.Fields[2].Constraints) != 1 {
+		t.Errorf("Expected email field to have 1 constraint, got %d", len(resource.Fields[2].Constraints))
+	}
+
+	// Check no constraints on age field
+	if len(resource.Fields[3].Constraints) != 0 {
+		t.Errorf("Expected age field to have 0 constraints, got %d", len(resource.Fields[3].Constraints))
+	}
+}

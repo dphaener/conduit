@@ -56,6 +56,8 @@ func (l *Lexer) ScanTokens() ([]Token, []LexError) {
 		Line:   l.line,
 		Column: l.column,
 		File:   l.file,
+		Start:  l.current,
+		End:    l.current,
 	})
 
 	return l.tokens, l.errors
@@ -430,6 +432,8 @@ func (l *Lexer) addToken(tokenType TokenType, literal interface{}) {
 		Line:    l.line,
 		Column:  l.startColumn,
 		File:    l.file,
+		Start:   l.start,
+		End:     l.current,
 	})
 }
 

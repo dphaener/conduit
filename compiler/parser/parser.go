@@ -11,6 +11,7 @@ type Parser struct {
 	current   int
 	errors    []ParseError
 	panicMode bool
+	source    string // Original source text for preserving formatting
 }
 
 // New creates a new Parser from a token stream
@@ -20,6 +21,19 @@ func New(tokens []lexer.Token) *Parser {
 		current:   0,
 		errors:    []ParseError{},
 		panicMode: false,
+		source:    "",
+	}
+}
+
+// NewWithSource creates a new Parser with access to the original source text
+// This enables better formatting preservation for block bodies
+func NewWithSource(tokens []lexer.Token, source string) *Parser {
+	return &Parser{
+		tokens:    tokens,
+		current:   0,
+		errors:    []ParseError{},
+		panicMode: false,
+		source:    source,
 	}
 }
 
@@ -128,6 +142,169 @@ func (p *Parser) skipNewlines() {
 	for p.match(lexer.TOKEN_NEWLINE) {
 		// Keep skipping
 	}
+}
+
+// skipNewlinesAndComments skips newlines and comments
+// Used when we want to skip over all whitespace and comments
+func (p *Parser) skipNewlinesAndComments() {
+	for p.match(lexer.TOKEN_NEWLINE, lexer.TOKEN_COMMENT) {
+		// Keep skipping
+	}
+}
+
+// collectLeadingComments collects comments that appear before the current token
+// This captures all comment tokens that appear on their own lines before the target element
+// It only looks back until it hits a non-comment, non-newline token or reaches a token
+// that's on a different line than the comments
+// Comments separated by more than 1 blank line from the current token are not collected
+func (p *Parser) collectLeadingComments() string {
+	var comments []string
+	startIdx := p.current
+
+	// First, calculate the distance from the current token to any preceding comments
+	// Find the position of the first non-newline token before current
+	firstNonNewlineIdx := startIdx - 1
+	for firstNonNewlineIdx >= 0 && p.tokens[firstNonNewlineIdx].Type == lexer.TOKEN_NEWLINE {
+		firstNonNewlineIdx--
+	}
+
+	// If we have a comment, check the line distance from current token to that comment
+	if firstNonNewlineIdx >= 0 && p.tokens[firstNonNewlineIdx].Type == lexer.TOKEN_COMMENT {
+		currentLine := p.peek().Line
+		commentLine := p.tokens[firstNonNewlineIdx].Line
+		lineDistance := currentLine - commentLine
+
+		// If the comment is more than 2 lines away (allowing max 1 blank line), don't collect it
+		if lineDistance > 2 {
+			return ""
+		}
+	}
+
+	// Skip back over newlines and comments to find comments on previous lines
+	lastNonCommentLine := -1
+	for i := startIdx - 1; i >= 0; i-- {
+		tok := p.tokens[i]
+
+		if tok.Type == lexer.TOKEN_COMMENT {
+			// Only collect comments that are on their own line (not trailing comments)
+			// Check if there's a newline before this comment or if it's at the start
+			isLeadingComment := false
+			if i == 0 {
+				isLeadingComment = true
+			} else {
+				prevTok := p.tokens[i-1]
+				// It's a leading comment if preceded by newline or another comment
+				isLeadingComment = prevTok.Type == lexer.TOKEN_NEWLINE || prevTok.Type == lexer.TOKEN_COMMENT
+			}
+
+			if isLeadingComment {
+				// Check if there's a gap of more than 1 blank line between consecutive comment blocks
+				if len(comments) > 0 && lastNonCommentLine != -1 {
+					lineGap := lastNonCommentLine - tok.Line
+					// If gap is > 2 lines (more than 1 blank line), stop collecting
+					if lineGap > 2 {
+						break
+					}
+				}
+
+				// Prepend comment (since we're going backward)
+				comments = append([]string{tok.Lexeme}, comments...)
+				lastNonCommentLine = tok.Line
+			} else {
+				// This is a trailing comment from the previous element, stop
+				break
+			}
+		} else if tok.Type == lexer.TOKEN_NEWLINE {
+			// Keep looking for more comments
+			continue
+		} else {
+			// Hit a non-comment, non-newline token
+			// If we've already collected comments, check the distance from this token to the first comment
+			if len(comments) > 0 {
+				firstCommentLine := lastNonCommentLine // Since we're going backward, last collected is the first
+				tokenLine := tok.Line
+				gap := firstCommentLine - tokenLine
+				// If gap > 2 (more than 1 blank line between token and first comment), discard all comments
+				if gap > 2 {
+					return ""
+				}
+			}
+			break
+		}
+	}
+
+	if len(comments) == 0 {
+		return ""
+	}
+
+	// Join comments with newlines
+	result := ""
+	for _, comment := range comments {
+		result += comment + "\n"
+	}
+	return result
+}
+
+// peekForTrailingComment checks if there's a comment on the same line after the current position
+// Returns the comment text if found, empty string otherwise
+func (p *Parser) peekForTrailingComment() string {
+	// Look ahead from current position
+	for i := p.current; i < len(p.tokens); i++ {
+		tok := p.tokens[i]
+		if tok.Type == lexer.TOKEN_COMMENT {
+			return tok.Lexeme
+		} else if tok.Type == lexer.TOKEN_NEWLINE {
+			// Hit newline before finding comment
+			return ""
+		} else if tok.Type == lexer.TOKEN_EOF || tok.Type == lexer.TOKEN_RBRACE {
+			// Hit end of block
+			return ""
+		}
+	}
+	return ""
+}
+
+// consumeTrailingComment consumes a trailing comment if present on the current line
+func (p *Parser) consumeTrailingComment() string {
+	// Look for a comment on the SAME LINE as the previous token
+	// We need to check if the next token is on the same line
+	if p.isAtEnd() {
+		return ""
+	}
+
+	previousLine := p.previous().Line
+
+	// Check if the next non-newline token is a comment on the same line
+	for !p.isAtEnd() {
+		currentTok := p.peek()
+
+		// If we hit a newline token, we're done (no trailing comment)
+		if currentTok.Type == lexer.TOKEN_NEWLINE {
+			return ""
+		}
+
+		// If we hit a closing brace, we're done
+		if currentTok.Type == lexer.TOKEN_RBRACE {
+			return ""
+		}
+
+		// If the current token is on a different line, we're done
+		if currentTok.Line != previousLine {
+			return ""
+		}
+
+		// If we found a comment on the same line, consume and return it
+		if currentTok.Type == lexer.TOKEN_COMMENT {
+			return p.advance().Lexeme
+		}
+
+		// Otherwise, this shouldn't happen in well-formed code
+		// But we should NOT advance here - just return empty
+		// The token will be processed by the next parser call
+		return ""
+	}
+
+	return ""
 }
 
 // expectNewlineOrEOF expects a newline or EOF

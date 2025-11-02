@@ -178,6 +178,8 @@ type Token struct {
 	Line    int
 	Column  int
 	File    string // Source file path
+	Start   int    // Byte offset in source where token starts
+	End     int    // Byte offset in source where token ends (exclusive)
 }
 
 // String returns a string representation of the token type
