@@ -16,11 +16,13 @@ import (
 )
 
 var (
-	runPort int
+	runPort             int
+	requireMigrations   bool
 )
 
 func init() {
 	runCmd.Flags().IntVar(&runPort, "port", 3000, "Port to run the server on")
+	runCmd.Flags().BoolVar(&requireMigrations, "require-migrations", false, "Block startup if migrations are pending")
 }
 
 var runCmd = &cobra.Command{
@@ -144,6 +146,22 @@ var runCmd = &cobra.Command{
 		// Check if binary exists
 		if _, err := os.Stat(opts.OutputPath); os.IsNotExist(err) {
 			return fmt.Errorf("%s not found - build may have failed", opts.OutputPath)
+		}
+
+		// Check migration status before starting server
+		migrationStatus, err := build.CheckMigrationStatus()
+		if err != nil {
+			return fmt.Errorf("failed to check migration status: %w", err)
+		}
+
+		// Print warning if there are pending migrations
+		if len(migrationStatus.Pending) > 0 {
+			build.PrintMigrationWarning(migrationStatus)
+
+			// Block startup if --require-migrations flag is set
+			if requireMigrations {
+				return fmt.Errorf("startup blocked: %d pending migration(s) detected (use --require-migrations=false to override)", len(migrationStatus.Pending))
+			}
 		}
 
 		// Run the application

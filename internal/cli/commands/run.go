@@ -14,12 +14,14 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/conduit-lang/conduit/internal/cli/config"
+	"github.com/conduit-lang/conduit/internal/tooling/build"
 )
 
 var (
-	runPort       int
-	runHotReload  bool
-	runBuildFirst bool
+	runPort             int
+	runHotReload        bool
+	runBuildFirst       bool
+	requireMigrations   bool
 )
 
 // NewRunCommand creates the run command
@@ -45,6 +47,7 @@ Examples:
 	cmd.Flags().IntVarP(&runPort, "port", "p", 3000, "Port to run the server on")
 	cmd.Flags().BoolVar(&runHotReload, "hot-reload", false, "Enable hot reload on file changes (stub)")
 	cmd.Flags().BoolVar(&runBuildFirst, "build", true, "Build before running")
+	cmd.Flags().BoolVar(&requireMigrations, "require-migrations", false, "Block startup if migrations are pending")
 
 	return cmd
 }
@@ -86,6 +89,22 @@ func runRun(cmd *cobra.Command, args []string) error {
 	// Check if binary exists
 	if _, err := os.Stat(outputPath); os.IsNotExist(err) {
 		return fmt.Errorf("%s not found - build may have failed", outputPath)
+	}
+
+	// Check migration status before starting server
+	migrationStatus, err := build.CheckMigrationStatus()
+	if err != nil {
+		return fmt.Errorf("failed to check migration status: %w", err)
+	}
+
+	// Print warning if there are pending migrations or database issues
+	if len(migrationStatus.Pending) > 0 || migrationStatus.DatabaseError != nil || migrationStatus.DatabaseSkipped {
+		build.PrintMigrationWarning(migrationStatus)
+
+		// Block startup if --require-migrations flag is set and there are pending migrations
+		if requireMigrations && len(migrationStatus.Pending) > 0 {
+			return fmt.Errorf("startup blocked: %d pending migration(s) detected (use --require-migrations=false to override)", len(migrationStatus.Pending))
+		}
 	}
 
 	// Show hot reload status
