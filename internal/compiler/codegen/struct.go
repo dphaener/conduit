@@ -164,7 +164,12 @@ func (g *Generator) generateConstraintValidation(resource *ast.ResourceNode, fie
 	switch constraint.Name {
 	case "min":
 		if len(constraint.Arguments) > 0 {
-			g.writeLine("if len(%s.%s) < %v {", receiverName, fieldName, extractLiteralValue(constraint.Arguments[0]))
+			// For nullable fields, check if pointer is non-nil before validating
+			if field.Nullable {
+				g.writeLine("if %s.%s != nil && len(*%s.%s) < %v {", receiverName, fieldName, receiverName, fieldName, extractLiteralValue(constraint.Arguments[0]))
+			} else {
+				g.writeLine("if len(%s.%s) < %v {", receiverName, fieldName, extractLiteralValue(constraint.Arguments[0]))
+			}
 			g.indent++
 			errorMsg := constraint.Error
 			if errorMsg == "" {
@@ -177,7 +182,12 @@ func (g *Generator) generateConstraintValidation(resource *ast.ResourceNode, fie
 
 	case "max":
 		if len(constraint.Arguments) > 0 {
-			g.writeLine("if len(%s.%s) > %v {", receiverName, fieldName, extractLiteralValue(constraint.Arguments[0]))
+			// For nullable fields, check if pointer is non-nil before validating
+			if field.Nullable {
+				g.writeLine("if %s.%s != nil && len(*%s.%s) > %v {", receiverName, fieldName, receiverName, fieldName, extractLiteralValue(constraint.Arguments[0]))
+			} else {
+				g.writeLine("if len(%s.%s) > %v {", receiverName, fieldName, extractLiteralValue(constraint.Arguments[0]))
+			}
 			g.indent++
 			errorMsg := constraint.Error
 			if errorMsg == "" {
