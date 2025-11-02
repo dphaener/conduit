@@ -17,20 +17,25 @@ type Program struct {
 
 // ResourceNode represents a resource definition
 type ResourceNode struct {
-	Name          string
-	Documentation string // /// comments above resource
-	Fields        []*FieldNode
-	Relationships []*RelationshipNode
-	Location      SourceLocation
+	Name           string
+	Documentation  string // /// comments above resource
+	LeadingComment string // # comments above resource (before resource keyword)
+	Fields         []*FieldNode
+	Relationships  []*RelationshipNode
+	Hooks          []*HookNode
+	Constraints    []*CustomConstraintNode
+	Location       SourceLocation
 }
 
 // FieldNode represents a field definition
 type FieldNode struct {
-	Name        string
-	Type        TypeNode
-	Nullable    bool // ! vs ?
-	Constraints []*ConstraintNode
-	Location    SourceLocation
+	Name          string
+	Type          TypeNode
+	Nullable      bool // ! vs ?
+	Constraints   []*ConstraintNode
+	LeadingComment  string // Comment on line(s) before this field
+	TrailingComment string // Comment at end of field line
+	Location      SourceLocation
 }
 
 // TypeKind represents the kind of type
@@ -59,13 +64,15 @@ type TypeNode struct {
 
 // RelationshipNode represents a belongs-to relationship
 type RelationshipNode struct {
-	Name         string
-	TargetType   string   // Resource name
-	Nullable     bool     // ! vs ?
-	ForeignKey   string   // Optional metadata
-	OnDelete     string   // restrict, cascade, set_null, no_action
-	OnUpdate     string   // cascade, restrict, etc.
-	Location     SourceLocation
+	Name            string
+	TargetType      string // Resource name
+	Nullable        bool   // ! vs ?
+	ForeignKey      string // Optional metadata
+	OnDelete        string // restrict, cascade, set_null, no_action
+	OnUpdate        string // cascade, restrict, etc.
+	LeadingComment  string // Comment on line(s) before this relationship
+	TrailingComment string // Comment at end of relationship line
+	Location        SourceLocation
 }
 
 // ConstraintNode represents a field constraint annotation
@@ -73,6 +80,21 @@ type ConstraintNode struct {
 	Name      string                 // min, max, unique, pattern, etc.
 	Arguments []interface{}          // Arguments to the constraint
 	Location  SourceLocation
+}
+
+// HookNode represents a resource-level hook (@before or @after)
+type HookNode struct {
+	Type     string // "before" or "after"
+	Trigger  string // e.g., "create", "update", "delete"
+	Body     string // Raw body content captured as string
+	Location SourceLocation
+}
+
+// CustomConstraintNode represents a resource-level custom constraint
+type CustomConstraintNode struct {
+	Name     string // The constraint name
+	Body     string // Raw body content captured as string
+	Location SourceLocation
 }
 
 // ConstraintKind represents the type of constraint
@@ -107,6 +129,8 @@ func NewResourceNode(name string, doc string, loc SourceLocation) *ResourceNode 
 		Documentation: doc,
 		Fields:        []*FieldNode{},
 		Relationships: []*RelationshipNode{},
+		Hooks:         []*HookNode{},
+		Constraints:   []*CustomConstraintNode{},
 		Location:      loc,
 	}
 }
@@ -196,6 +220,25 @@ func NewConstraintNode(name string, args []interface{}, loc SourceLocation) *Con
 	}
 }
 
+// NewHookNode creates a new HookNode
+func NewHookNode(hookType, trigger, body string, loc SourceLocation) *HookNode {
+	return &HookNode{
+		Type:     hookType,
+		Trigger:  trigger,
+		Body:     body,
+		Location: loc,
+	}
+}
+
+// NewCustomConstraintNode creates a new CustomConstraintNode
+func NewCustomConstraintNode(name, body string, loc SourceLocation) *CustomConstraintNode {
+	return &CustomConstraintNode{
+		Name:     name,
+		Body:     body,
+		Location: loc,
+	}
+}
+
 // AddField adds a field to the resource
 func (r *ResourceNode) AddField(field *FieldNode) {
 	r.Fields = append(r.Fields, field)
@@ -204,6 +247,16 @@ func (r *ResourceNode) AddField(field *FieldNode) {
 // AddRelationship adds a relationship to the resource
 func (r *ResourceNode) AddRelationship(rel *RelationshipNode) {
 	r.Relationships = append(r.Relationships, rel)
+}
+
+// AddHook adds a hook to the resource
+func (r *ResourceNode) AddHook(hook *HookNode) {
+	r.Hooks = append(r.Hooks, hook)
+}
+
+// AddCustomConstraint adds a custom constraint to the resource
+func (r *ResourceNode) AddCustomConstraint(constraint *CustomConstraintNode) {
+	r.Constraints = append(r.Constraints, constraint)
 }
 
 // AddConstraint adds a constraint to the field

@@ -33,6 +33,7 @@ func New(config *Config) *Formatter {
 func (f *Formatter) Format(source string) (string, error) {
 	// Tokenize
 	l := lexer.New(source, "")
+	l.SetPreserveComments(true) // Enable comment preservation
 	tokens, lexErrors := l.ScanTokens()
 
 	// Check for lexer errors
@@ -41,7 +42,7 @@ func (f *Formatter) Format(source string) (string, error) {
 	}
 
 	// Parse
-	p := parser.New(tokens)
+	p := parser.NewWithSource(tokens, source)
 	program, parseErrors := p.Parse()
 
 	if len(parseErrors) > 0 {
@@ -85,6 +86,11 @@ func (f *Formatter) formatProgram(program *parser.Program) {
 
 // formatResource formats a ResourceNode
 func (f *Formatter) formatResource(resource *parser.ResourceNode) {
+	// Write leading comments if present
+	if resource.LeadingComment != "" {
+		f.writeComments(resource.LeadingComment)
+	}
+
 	// Write documentation if present
 	if resource.Documentation != "" {
 		lines := strings.Split(resource.Documentation, "\n")
@@ -131,6 +137,22 @@ func (f *Formatter) formatResource(resource *parser.ResourceNode) {
 		f.formatRelationship(rel, maxFieldLen)
 	}
 
+	// Write hooks
+	if len(resource.Hooks) > 0 && (len(resource.Fields) > 0 || len(resource.Relationships) > 0) {
+		f.writeLine("")
+	}
+	for _, hook := range resource.Hooks {
+		f.formatHook(hook)
+	}
+
+	// Write custom constraints
+	if len(resource.Constraints) > 0 && (len(resource.Fields) > 0 || len(resource.Relationships) > 0 || len(resource.Hooks) > 0) {
+		f.writeLine("")
+	}
+	for _, constraint := range resource.Constraints {
+		f.formatCustomConstraint(constraint)
+	}
+
 	f.indent--
 	f.writeIndent()
 	f.buf.WriteString("}\n")
@@ -138,6 +160,11 @@ func (f *Formatter) formatResource(resource *parser.ResourceNode) {
 
 // formatField formats a FieldNode
 func (f *Formatter) formatField(field *parser.FieldNode, maxLen int) {
+	// Write leading comments if present
+	if field.LeadingComment != "" {
+		f.writeComments(field.LeadingComment)
+	}
+
 	f.writeIndent()
 	f.buf.WriteString(field.Name)
 
@@ -163,11 +190,22 @@ func (f *Formatter) formatField(field *parser.FieldNode, maxLen int) {
 		f.formatConstraint(constraint)
 	}
 
+	// Write trailing comment if present
+	if field.TrailingComment != "" {
+		f.buf.WriteString(" ")
+		f.buf.WriteString(field.TrailingComment)
+	}
+
 	f.buf.WriteString("\n")
 }
 
 // formatRelationship formats a RelationshipNode
 func (f *Formatter) formatRelationship(rel *parser.RelationshipNode, maxLen int) {
+	// Write leading comments if present
+	if rel.LeadingComment != "" {
+		f.writeComments(rel.LeadingComment)
+	}
+
 	f.writeIndent()
 	f.buf.WriteString(rel.Name)
 
@@ -216,6 +254,12 @@ func (f *Formatter) formatRelationship(rel *parser.RelationshipNode, maxLen int)
 		f.indent--
 		f.writeIndent()
 		f.buf.WriteString("}")
+	}
+
+	// Write trailing comment if present
+	if rel.TrailingComment != "" {
+		f.buf.WriteString(" ")
+		f.buf.WriteString(rel.TrailingComment)
 	}
 
 	f.buf.WriteString("\n")
@@ -299,6 +343,44 @@ func (f *Formatter) writeIndent() {
 	f.buf.WriteString(strings.Repeat(" ", spaces))
 }
 
+// formatHook formats a HookNode
+func (f *Formatter) formatHook(hook *parser.HookNode) {
+	f.writeIndent()
+	f.buf.WriteString("@")
+	f.buf.WriteString(hook.Type)
+	f.buf.WriteString(" ")
+	f.buf.WriteString(hook.Trigger)
+	f.buf.WriteString(" {\n")
+	f.indent++
+
+	// Write body with normalized indentation
+	if hook.Body != "" {
+		f.writeBodyWithNormalizedIndentation(hook.Body)
+	}
+
+	f.indent--
+	f.writeIndent()
+	f.buf.WriteString("}\n")
+}
+
+// formatCustomConstraint formats a CustomConstraintNode
+func (f *Formatter) formatCustomConstraint(constraint *parser.CustomConstraintNode) {
+	f.writeIndent()
+	f.buf.WriteString("@constraint ")
+	f.buf.WriteString(constraint.Name)
+	f.buf.WriteString(" {\n")
+	f.indent++
+
+	// Write body with normalized indentation
+	if constraint.Body != "" {
+		f.writeBodyWithNormalizedIndentation(constraint.Body)
+	}
+
+	f.indent--
+	f.writeIndent()
+	f.buf.WriteString("}\n")
+}
+
 // writeLine writes a line with indentation
 func (f *Formatter) writeLine(text string) {
 	if text != "" {
@@ -306,4 +388,89 @@ func (f *Formatter) writeLine(text string) {
 		f.buf.WriteString(text)
 	}
 	f.buf.WriteString("\n")
+}
+
+// writeComments writes comments with proper indentation
+// Comments are expected to include the # prefix
+func (f *Formatter) writeComments(comments string) {
+	if comments == "" {
+		return
+	}
+
+	lines := strings.Split(strings.TrimRight(comments, "\n"), "\n")
+	for _, line := range lines {
+		f.writeIndent()
+		f.buf.WriteString(strings.TrimSpace(line))
+		f.buf.WriteString("\n")
+	}
+}
+
+// writeBodyWithNormalizedIndentation writes a body string with normalized indentation
+// It strips the common leading indentation from all lines and re-applies the formatter's base indentation
+func (f *Formatter) writeBodyWithNormalizedIndentation(body string) {
+	lines := strings.Split(body, "\n")
+	if len(lines) == 0 {
+		return
+	}
+
+	// Find minimum indentation (ignore empty lines)
+	minIndent := -1
+	for _, line := range lines {
+		if len(strings.TrimSpace(line)) == 0 {
+			continue
+		}
+		// Count leading spaces
+		indent := 0
+		for _, ch := range line {
+			if ch == ' ' {
+				indent++
+			} else if ch == '\t' {
+				indent += 4 // Treat tab as 4 spaces
+			} else {
+				break
+			}
+		}
+		if minIndent == -1 || indent < minIndent {
+			minIndent = indent
+		}
+	}
+
+	// If no non-empty lines, nothing to do
+	if minIndent == -1 {
+		return
+	}
+
+	// Write lines with normalized indentation
+	for _, line := range lines {
+		if len(strings.TrimSpace(line)) == 0 {
+			f.buf.WriteString("\n") // Preserve empty line
+			continue
+		}
+
+		// Strip the common prefix indentation
+		dedented := line
+		if minIndent > 0 && len(line) >= minIndent {
+			// Remove minIndent spaces/tabs from the beginning
+			stripped := 0
+			for i, ch := range line {
+				if stripped >= minIndent {
+					dedented = line[i:]
+					break
+				}
+				if ch == ' ' {
+					stripped++
+				} else if ch == '\t' {
+					stripped += 4
+				} else {
+					dedented = line[i:]
+					break
+				}
+			}
+		}
+
+		// Write with formatter's base indentation
+		f.writeIndent()
+		f.buf.WriteString(dedented)
+		f.buf.WriteString("\n")
+	}
 }

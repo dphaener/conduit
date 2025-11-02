@@ -722,3 +722,131 @@ func TestUnifiedDiffCorrectness(t *testing.T) {
 		t.Errorf("Unchanged lines should not appear in diff output")
 	}
 }
+
+func TestFormatterPreservesBlankLinesInHooks(t *testing.T) {
+	input := `resource User {
+id: uuid! @primary @auto
+name: string!
+
+@before create {
+    // First comment
+
+    doSomething()
+
+    // Second comment
+    doOther()
+}
+}`
+
+	expected := `resource User {
+  id  : uuid! @primary @auto
+  name: string!
+
+  @before create {
+    // First comment
+
+    doSomething()
+
+    // Second comment
+    doOther()
+  }
+}
+`
+
+	config := DefaultConfig()
+	formatter := New(config)
+	result, err := formatter.Format(input)
+
+	if err != nil {
+		t.Fatalf("Formatting failed: %v", err)
+	}
+
+	if result != expected {
+		t.Errorf("Format mismatch.\nExpected:\n%s\nGot:\n%s", expected, result)
+	}
+
+	// Verify blank lines are preserved
+	lines := strings.Split(result, "\n")
+	blankLineCount := 0
+	inHook := false
+	for _, line := range lines {
+		if strings.Contains(line, "@before") {
+			inHook = true
+		}
+		if inHook && strings.TrimSpace(line) == "" {
+			blankLineCount++
+		}
+		if inHook && strings.Contains(line, "}") {
+			break
+		}
+	}
+
+	// Should have 2 blank lines within the hook body
+	if blankLineCount < 2 {
+		t.Errorf("Expected at least 2 blank lines preserved in hook body, got %d", blankLineCount)
+	}
+}
+
+func TestFormatterPreservesBlankLinesInConstraints(t *testing.T) {
+	input := `resource User {
+id: uuid! @primary @auto
+email: string!
+
+@constraint valid_email {
+    // Validate email format
+
+    checkEmailFormat()
+
+    // Check domain
+    validateDomain()
+}
+}`
+
+	expected := `resource User {
+  id   : uuid! @primary @auto
+  email: string!
+
+  @constraint valid_email {
+    // Validate email format
+
+    checkEmailFormat()
+
+    // Check domain
+    validateDomain()
+  }
+}
+`
+
+	config := DefaultConfig()
+	formatter := New(config)
+	result, err := formatter.Format(input)
+
+	if err != nil {
+		t.Fatalf("Formatting failed: %v", err)
+	}
+
+	if result != expected {
+		t.Errorf("Format mismatch.\nExpected:\n%s\nGot:\n%s", expected, result)
+	}
+
+	// Verify blank lines are preserved
+	lines := strings.Split(result, "\n")
+	blankLineCount := 0
+	inConstraint := false
+	for _, line := range lines {
+		if strings.Contains(line, "@constraint") {
+			inConstraint = true
+		}
+		if inConstraint && strings.TrimSpace(line) == "" {
+			blankLineCount++
+		}
+		if inConstraint && strings.Contains(line, "}") {
+			break
+		}
+	}
+
+	// Should have 2 blank lines within the constraint body
+	if blankLineCount < 2 {
+		t.Errorf("Expected at least 2 blank lines preserved in constraint body, got %d", blankLineCount)
+	}
+}
