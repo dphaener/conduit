@@ -15,9 +15,10 @@ import (
 // NewWatchCommand creates the watch command
 func NewWatchCommand() *cobra.Command {
 	var (
-		port     int
-		appPort  int
-		verbose  bool
+		port        int
+		appPort     int
+		verbose     bool
+		autoMigrate bool
 	)
 
 	cmd := &cobra.Command{
@@ -28,6 +29,7 @@ func NewWatchCommand() *cobra.Command {
 The watch command monitors your .cdt files for changes and automatically:
   • Recompiles changed files incrementally
   • Rebuilds the application binary
+  • Detects and handles schema migrations
   • Restarts the server
   • Reloads connected browsers
 
@@ -46,6 +48,9 @@ Examples:
 
   # Enable verbose logging
   conduit watch --verbose
+
+  # Auto-apply migrations on schema changes
+  conduit watch --auto-migrate
 `,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// Check if app directory exists
@@ -55,8 +60,10 @@ Examples:
 
 			// Create dev server configuration
 			config := &watch.DevServerConfig{
-				Port:    port,
-				AppPort: appPort,
+				Port:        port,
+				AppPort:     appPort,
+				AutoMigrate: autoMigrate,
+				Verbose:     verbose,
 				WatchPatterns: []string{
 					"*.cdt",
 					"*.css",
@@ -116,6 +123,7 @@ Examples:
 	cmd.Flags().IntVar(&port, "port", 3000, "Development server port")
 	cmd.Flags().IntVar(&appPort, "app-port", 3001, "Application server port")
 	cmd.Flags().BoolVar(&verbose, "verbose", false, "Show verbose output")
+	cmd.Flags().BoolVar(&autoMigrate, "auto-migrate", false, "Automatically apply migrations on schema changes")
 
 	return cmd
 }
