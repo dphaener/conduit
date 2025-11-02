@@ -10,23 +10,48 @@ Conduit is a programming language designed from the ground up for AI-assisted de
 
 Conduit is in active development. The compiler is functional and can generate working Go applications, but many features are incomplete or missing. **Not recommended for production use.**
 
-What works:
+## What Works Today (v0.1.0)
+
+### Core Features
 - ✅ Basic compiler (lexer, parser, type checker, code generator)
-- ✅ Resource definitions with fields and types
+- ✅ Resource definitions with fields and explicit nullability (`!` vs `?`)
+- ✅ Primitive types (string, int, float, bool, uuid, timestamp, email, url, etc.)
+- ✅ Structural types (array, hash, enum, inline structs)
+- ✅ Field constraints (@min, @max, @unique, @primary, @auto, @default)
+- ✅ Relationships (belongs_to with foreign_key metadata)
 - ✅ REST API generation with CRUD endpoints
-- ✅ Lifecycle hooks (`@before create`, etc.)
-- ✅ Built-in stdlib functions (String.slugify, etc.)
-- ✅ UUID and basic type support
+- ✅ Lifecycle hooks (`@before create/update/delete`, `@after create/update/delete`)
+- ✅ Custom constraints (`@constraint` blocks - parsed, not yet executed)
 - ✅ Database migrations (PostgreSQL)
 
-What's missing:
-- ❌ Full ORM implementation (relationships, query builder)
+### Standard Library (15 MVP Functions)
+- ✅ String: length, slugify, upcase, downcase, trim, contains, replace
+- ✅ Time: now, format, parse
+- ✅ Array: length, contains
+- ✅ UUID: generate, validate
+- ✅ Random: int
+
+### What's NOT Yet Implemented
+
+**See [ROADMAP.md](ROADMAP.md) for complete details.**
+
+Key missing features:
+- ❌ `@has_many` relationships (one-to-many)
+- ❌ `@scope` query scopes
+- ❌ `@validate` procedural validation (execution)
+- ❌ `@invariant` runtime invariants
+- ❌ `@computed` fields
+- ❌ `@function` custom functions
+- ❌ Query builder (find, where, joins, etc.)
+- ❌ Expression language (if/match/rescue)
+- ❌ Most stdlib functions (Logger, Cache, Crypto, Context, etc.)
 - ❌ LSP/IDE integration
 - ❌ Hot reload / watch mode
-- ❌ Comprehensive test coverage
-- ❌ Documentation
-- ❌ Error messages need improvement
-- ❌ Many stdlib functions
+- ❌ Testing framework
+- ❌ GraphQL support
+- ❌ Background jobs
+
+**Important:** The LANGUAGE-SPEC.md is aspirational. Many documented features don't work yet. Always check ROADMAP.md for current status.
 
 ## Key Features
 

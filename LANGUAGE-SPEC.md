@@ -1,10 +1,23 @@
 # Conduit Language Specification
 
 **Version:** 2.0
-**Status:** Ready for Implementation
-**Updated:** 2025-10-13
+**Status:** Aspirational Design Document
+**Updated:** 2025-11-02
 
-This document is the canonical reference for the Conduit programming language. It defines the complete syntax, semantics, type system, standard library, and expression language.
+⚠️ **IMPORTANT: Many features in this document are not yet implemented.**
+
+This document describes the **intended** design of Conduit. Implementation is in progress. For accurate information about what works today, see:
+
+- **[ROADMAP.md](ROADMAP.md)** - Complete list of unimplemented features
+- **[README.md](README.md)** - Current version capabilities
+- **[GETTING-STARTED.md](GETTING-STARTED.md)** - Working examples only
+
+**Legend:**
+- ✅ **Implemented** - Feature works as documented
+- ⚠️ **Partially Implemented** - Feature parsed but not fully functional
+- ❌ **Not Implemented** - Feature documented but not working yet
+
+This document is the canonical reference for the Conduit programming language design. It defines the complete syntax, semantics, type system, standard library, and expression language.
 
 ---
 
@@ -60,6 +73,8 @@ product.cdt
 ---
 
 ## Type System
+
+**Status:** ✅ **Fully Implemented**
 
 ### Explicit Nullability
 
@@ -204,6 +219,8 @@ settings: {
 
 ## Resource Syntax
 
+**Status:** ⚠️ **Partially Implemented** - Basic structure works, many annotations don't
+
 ### Basic Structure
 
 ```
@@ -305,6 +322,12 @@ coordinates: {
 
 ### Relationships
 
+**Status:** ⚠️ **Partially Implemented**
+- ✅ belongs_to with inline metadata works
+- ❌ @has_many not implemented
+- ❌ @has_many through not implemented
+- ❌ @belongs_to annotation form not implemented
+
 **Belongs To (Foreign Key):**
 ```
 // Simple
@@ -324,8 +347,10 @@ category: Category? {
 }
 ```
 
-**Has Many:**
+**Has Many:** ❌ **Not Implemented** - See [ROADMAP.md](ROADMAP.md#has_many---one-to-many-relationships)
+
 ```
+# This syntax is parsed but not functional
 @has_many Post as "posts"
 
 // With metadata
@@ -369,7 +394,9 @@ parent: Category? {
 
 ## Expression Language
 
-This section defines the expression language used within hooks, validations, computed fields, and custom functions.
+❌ **Mostly Not Implemented** - Most expression features don't work yet. See [ROADMAP.md](ROADMAP.md)
+
+This section defines the **intended** expression language for hooks, validations, computed fields, and custom functions.
 
 ### Literals
 
@@ -618,7 +645,16 @@ self.title.truncate(50)
 
 ## Standard Library
 
+⚠️ **Partially Implemented** - Only 15 MVP functions work. See [ROADMAP.md](ROADMAP.md#standard-library---missing-functions) for full list.
+
 All built-in functions are namespaced to prevent ambiguity.
+
+**Currently Implemented (15 functions):**
+- String: length, slugify, upcase, downcase, trim, contains, replace
+- Time: now, format, parse
+- Array: length, contains
+- UUID: generate, validate
+- Random: int
 
 ### String Namespace
 
@@ -791,8 +827,10 @@ Env.has?(key: string) -> bool
 
 ### Custom Functions
 
+❌ **Not Implemented** - See [ROADMAP.md](ROADMAP.md#function---custom-functions)
+
 ```
-// Define custom functions co-located with resource
+// This syntax is not functional
 @function generate_slug(title: string) -> string {
   let cleaned = String.downcase(title)
   let replaced = Regex.replace(cleaned, /[^a-z0-9]+/, "-")
@@ -812,6 +850,8 @@ Env.has?(key: string) -> bool
 ---
 
 ## Lifecycle Hooks
+
+**Status:** ✅ **Implemented** - Hooks are parsed and code generated
 
 ### Hook Types
 
@@ -856,26 +896,31 @@ Env.has?(key: string) -> bool
 
 ### Change Tracking
 
-Available in `@before update` and `@after update` hooks:
+**Status:** ⚠️ Partially Implemented - Available in generated Go code only
 
+Change tracking methods are generated for all resources but are not yet accessible in the hook DSL syntax. You can use them in your generated Go code:
+
+```go
+// In generated Go code (not in .cdt files):
+if post.TitleChanged() {
+  previousTitle := post.PreviousTitle()
+  // ... handle change
+}
+
+changedFields := post.ChangedFields()
+hasChanges := post.HasChanges()
 ```
+
+**Planned for hook DSL (not yet available):**
+```conduit
 @after update {
-  // Check if field changed
-  if self.content_changed? {
-    Revision.create!({
-      post_id: self.id,
-      content: self.previous_value(:content)
-    })
-  }
-
-  // Check specific value
-  if self.status_changed_to?("published") {
-    self.published_at = Time.now()
-  }
-
-  if self.status_changed_from?("draft") {
-    Logger.info("Post #{self.id} moved from draft")
-  }
+  // ❌ Not yet supported in hook DSL:
+  // if self.content_changed? {
+  //   Revision.create!({
+  //     post_id: self.id,
+  //     content: self.previous_value(:content)
+  //   })
+  // }
 }
 ```
 
@@ -904,7 +949,15 @@ Post.bulk_update!(updates)
 
 ## Validation & Constraints
 
+**Status:** ⚠️ **Partially Implemented**
+- ✅ `@constraint` blocks are parsed
+- ❌ Constraint execution not implemented
+- ❌ `@validate` blocks not implemented
+- ❌ `@invariant` blocks not implemented
+
 ### Procedural Validation
+
+❌ **Not Implemented** - See [ROADMAP.md](ROADMAP.md#validate---procedural-validation)
 
 ```
 @validate {
@@ -926,6 +979,8 @@ Post.bulk_update!(updates)
 ```
 
 ### Declarative Constraints
+
+⚠️ **Partially Implemented** - Parsed but not executed. See [ROADMAP.md](ROADMAP.md)
 
 ```
 @constraint sale_price_valid {
@@ -954,6 +1009,8 @@ Post.bulk_update!(updates)
 ```
 
 ### Runtime Invariants
+
+❌ **Not Implemented** - See [ROADMAP.md](ROADMAP.md#invariant---runtime-invariants)
 
 ```
 @invariant metrics_non_negative {
@@ -1018,7 +1075,11 @@ let value = self.required_field!    // Panics if nil
 
 ## Query Language
 
+❌ **Not Implemented** - Query builder does not exist yet. See [ROADMAP.md](ROADMAP.md#query-language-features)
+
 ### Basic Queries
+
+❌ **Not Implemented**
 
 ```
 // Find by ID
@@ -1042,8 +1103,10 @@ Post.where(status not_in ["draft", "archived"])
 
 ### Query Scopes
 
+❌ **Not Implemented** - See [ROADMAP.md](ROADMAP.md#scope---query-scopes)
+
 ```
-// Define reusable scopes
+// This syntax is not functional
 @scope published {
   where: { status: "published", published_at: { lte: Time.now() } }
   order_by: "published_at DESC"
