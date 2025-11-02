@@ -380,7 +380,7 @@ func (a *API) GetDiagnostics(uri string) []Diagnostic {
 			},
 			Severity: diagnosticSeverityFromTypeError(err),
 			Code:     string(err.Code),
-			Message:  err.Error(),
+			Message:  err.Message,
 			Source:   "conduit",
 		})
 	}
