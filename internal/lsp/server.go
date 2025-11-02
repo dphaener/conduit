@@ -35,6 +35,9 @@ type Server struct {
 
 	// Server capabilities
 	capabilities protocol.ServerCapabilities
+
+	// cancel is used to signal server shutdown
+	cancel context.CancelFunc
 }
 
 // NewServer creates a new LSP server instance
@@ -82,6 +85,10 @@ func NewServer() *Server {
 // Run starts the LSP server
 func (s *Server) Run(ctx context.Context) error {
 	s.logger.Println("Starting Conduit Language Server")
+
+	// Create context with cancellation for shutdown
+	ctx, cancel := context.WithCancel(ctx)
+	s.cancel = cancel
 
 	// Create JSON-RPC stream handler
 	stream := jsonrpc2.NewStream(stdrwc{})
@@ -203,12 +210,15 @@ func (s *Server) handleShutdown(ctx context.Context, reply jsonrpc2.Replier, req
 // handleExit handles the exit notification
 func (s *Server) handleExit(ctx context.Context, reply jsonrpc2.Replier, req jsonrpc2.Request) error {
 	s.logger.Println("Exit requested")
-	// Close connection gracefully instead of calling os.Exit(0)
-	// This allows proper cleanup and makes testing possible
-	if err := s.conn.Close(); err != nil {
-		s.logger.Printf("Error closing connection: %v", err)
+	// Reply first, then trigger shutdown
+	if err := reply(ctx, nil, nil); err != nil {
+		s.logger.Printf("Error replying to exit: %v", err)
 	}
-	return reply(ctx, nil, nil)
+	// Cancel the context to trigger graceful shutdown
+	if s.cancel != nil {
+		s.cancel()
+	}
+	return nil
 }
 
 // handleTextDocumentDidOpen handles document open notifications
