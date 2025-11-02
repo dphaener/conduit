@@ -41,19 +41,22 @@ func (p *Parser) parseResource() *ResourceNode {
 	p.skipNewlines()
 
 	// Parse resource body
-	for !p.check(lexer.TOKEN_RBRACE) && !p.isAtEnd() {
+	maxLoopIter := 10000
+	loopIter := 0
+	for !p.check(lexer.TOKEN_RBRACE) && !p.isAtEnd() && loopIter < maxLoopIter {
+		loopIter++
 		p.skipNewlines()
 
 		if p.check(lexer.TOKEN_RBRACE) {
 			break
 		}
 
-		// Check for annotations starting with @
+		// Check for resource-level annotations starting with @
+		// Examples: @before create { }, @constraint name { }, @deprecated
 		if p.check(lexer.TOKEN_AT) {
 			// Future: parse hooks, constraints, etc.
-			// For MVP, skip these
-			p.advance() // consume @
-			p.skipUntilNewlineOrBrace()
+			// For now, skip these including their block bodies
+			p.skipResourceLevelAnnotation()
 			continue
 		}
 
@@ -69,10 +72,22 @@ func (p *Parser) parseResource() *ResourceNode {
 				Message:  fmt.Sprintf("Unexpected token in resource body: %s", p.peek().Lexeme),
 				Location: TokenToLocation(p.peek()),
 			})
-			p.skipUntilNewlineOrBrace()
+			// Skip the unexpected token and any following block
+			p.advance()
+			// If followed by a block, skip it
+			if p.check(lexer.TOKEN_LBRACE) {
+				p.skipBalancedBlock()
+			}
 		}
 
 		p.skipNewlines()
+	}
+
+	if loopIter >= maxLoopIter {
+		p.addError(ParseError{
+			Message:  "Infinite loop detected in parseResource body",
+			Location: TokenToLocation(p.peek()),
+		})
 	}
 
 	// Consume closing brace
@@ -156,6 +171,18 @@ func (p *Parser) parseFieldOrRelationship(resource *ResourceNode) *FieldNode {
 
 	// Parse field constraints
 	for p.check(lexer.TOKEN_AT) {
+		// Check if this is actually a resource-level annotation (not a field constraint)
+		// Look ahead to see if the next token after @ is a resource-level keyword
+		nextPos := p.current + 1
+		if nextPos < len(p.tokens) {
+			nextTok := p.tokens[nextPos]
+			// If it's a resource-level annotation keyword, stop parsing field constraints
+			if nextTok.Type == lexer.TOKEN_BEFORE || nextTok.Type == lexer.TOKEN_AFTER ||
+				nextTok.Type == lexer.TOKEN_CONSTRAINT {
+				break
+			}
+		}
+
 		constraint := p.parseConstraint()
 		if constraint != nil {
 			field.AddConstraint(constraint)
@@ -369,4 +396,68 @@ func (p *Parser) skipUntilNewlineOrBrace() {
 		p.advance()
 	}
 	p.skipNewlines()
+}
+
+// skipResourceLevelAnnotation skips resource-level annotations that may include blocks
+// Examples: @before create { ... }, @constraint name { ... }, @deprecated
+func (p *Parser) skipResourceLevelAnnotation() {
+	// Consume the @ token (already checked by caller)
+	p.advance()
+
+	// Consume annotation name/identifier(s) until we hit a brace, newline, or closing resource brace
+	maxIter := 1000
+	iter := 0
+	for !p.isAtEnd() && !p.check(lexer.TOKEN_LBRACE) && !p.check(lexer.TOKEN_NEWLINE) && !p.check(lexer.TOKEN_RBRACE) && iter < maxIter {
+		iter++
+		p.advance()
+	}
+
+	if iter >= maxIter {
+		p.addError(ParseError{
+			Message:  "Infinite loop in skipResourceLevelAnnotation",
+			Location: TokenToLocation(p.peek()),
+		})
+		return
+	}
+
+	// Skip any newlines before checking for block
+	p.skipNewlines()
+
+	// If followed by a block, skip the entire balanced block
+	if p.check(lexer.TOKEN_LBRACE) {
+		p.skipBalancedBlock()
+	}
+
+	p.skipNewlines()
+}
+
+// skipBalancedBlock skips a balanced block delimited by braces { ... }
+func (p *Parser) skipBalancedBlock() {
+	if !p.match(lexer.TOKEN_LBRACE) {
+		return
+	}
+
+	depth := 1
+	maxIter := 10000 // Safety limit to prevent infinite loops
+	iter := 0
+	for !p.isAtEnd() && depth > 0 && iter < maxIter {
+		iter++
+		tok := p.peek()
+		if tok.Type == lexer.TOKEN_LBRACE {
+			depth++
+			p.advance()
+		} else if tok.Type == lexer.TOKEN_RBRACE {
+			depth--
+			p.advance()
+		} else {
+			p.advance()
+		}
+	}
+
+	if iter >= maxIter {
+		p.addError(ParseError{
+			Message:  "Infinite loop detected while skipping balanced block",
+			Location: TokenToLocation(p.peek()),
+		})
+	}
 }
