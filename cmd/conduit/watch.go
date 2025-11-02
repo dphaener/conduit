@@ -12,15 +12,17 @@ import (
 )
 
 var (
-	watchPort    int
-	watchAppPort int
-	watchVerbose bool
+	watchPort        int
+	watchAppPort     int
+	watchVerbose     bool
+	watchAutoMigrate bool
 )
 
 func init() {
 	watchCmd.Flags().IntVar(&watchPort, "port", 3000, "Development server port")
 	watchCmd.Flags().IntVar(&watchAppPort, "app-port", 3001, "Application server port")
 	watchCmd.Flags().BoolVar(&watchVerbose, "verbose", false, "Show verbose output")
+	watchCmd.Flags().BoolVar(&watchAutoMigrate, "auto-migrate", false, "Automatically apply migrations on schema changes")
 }
 
 var watchCmd = &cobra.Command{
@@ -29,16 +31,17 @@ var watchCmd = &cobra.Command{
 	Long: `Start the development server with automatic file watching and hot reload.
 
 The watch command monitors your .cdt files for changes and automatically:
-- Recompiles changed files incrementally
-- Rebuilds the application binary
-- Restarts the server
-- Reloads connected browsers
+  • Recompiles changed files incrementally
+  • Rebuilds the application binary
+  • Detects and handles schema migrations
+  • Restarts the server
+  • Reloads connected browsers
 
 Performance targets:
-- File change detection: <10ms
-- Incremental compile: <200ms
-- Browser reload: <100ms
-- Total (save to visible): <500ms
+  • File change detection: <10ms
+  • Incremental compile: <200ms
+  • Browser reload: <100ms
+  • Total (save to visible): <500ms
 
 Examples:
   # Start with default ports (3000 for dev server, 3001 for app)
@@ -49,6 +52,9 @@ Examples:
 
   # Enable verbose logging
   conduit watch --verbose
+
+  # Auto-apply migrations on schema changes
+  conduit watch --auto-migrate
 `,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// Check if app directory exists
@@ -58,8 +64,10 @@ Examples:
 
 		// Create dev server configuration
 		config := &watch.DevServerConfig{
-			Port:    watchPort,
-			AppPort: watchAppPort,
+			Port:        watchPort,
+			AppPort:     watchAppPort,
+			AutoMigrate: watchAutoMigrate,
+			Verbose:     watchVerbose,
 			WatchPatterns: []string{
 				"*.cdt",
 				"*.css",

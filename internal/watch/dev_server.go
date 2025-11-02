@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/conduit-lang/conduit/compiler/errors"
+	"github.com/conduit-lang/conduit/internal/tooling/build"
 )
 
 //go:embed assets/reload.js
@@ -32,20 +33,25 @@ type DevServer struct {
 	// Configuration
 	port           int
 	appPort        int
+	autoMigrate    bool
+	verbose        bool
 	watchPatterns  []string
 	ignorePatterns []string
 
 	// State
-	isBuilding     bool
-	buildMutex     sync.Mutex
-	stopChan       chan struct{}
-	wg             sync.WaitGroup
+	isBuilding      bool
+	buildMutex      sync.Mutex
+	appProcessMutex sync.Mutex
+	stopChan        chan struct{}
+	wg              sync.WaitGroup
 }
 
 // DevServerConfig holds configuration for the dev server
 type DevServerConfig struct {
 	Port           int
 	AppPort        int
+	AutoMigrate    bool
+	Verbose        bool
 	WatchPatterns  []string
 	IgnorePatterns []string
 }
@@ -76,6 +82,8 @@ func NewDevServer(config *DevServerConfig) (*DevServer, error) {
 		reloadServer:   NewReloadServer(),
 		port:           config.Port,
 		appPort:        config.AppPort,
+		autoMigrate:    config.AutoMigrate,
+		verbose:        config.Verbose,
 		watchPatterns:  config.WatchPatterns,
 		ignorePatterns: config.IgnorePatterns,
 		stopChan:       make(chan struct{}),
@@ -107,10 +115,38 @@ func (ds *DevServer) Start() error {
 	} else {
 		log.Printf("[DevServer] Initial build successful (%.2fs)", result.Duration.Seconds())
 
+		// Generate migrations if schema changed
+		if err := ds.compiler.HandleMigrations(); err != nil {
+			log.Printf("[DevServer] Warning: Migration generation failed: %v", err)
+		}
+
 		// Build Go binary
 		if err := ds.buildBinary(); err != nil {
 			log.Printf("[DevServer] Failed to build binary: %v", err)
 		} else {
+			// Check for pending migrations before starting server
+			migrationStatus, err := build.CheckMigrationStatus()
+			if err != nil {
+				log.Printf("[DevServer] Warning: Failed to check migration status: %v", err)
+			} else if migrationStatus.DatabaseSkipped {
+				// DATABASE_URL not set
+				if ds.autoMigrate {
+					log.Printf("[DevServer] Warning: DATABASE_URL not set - cannot auto-migrate")
+				}
+			} else if migrationStatus.DatabaseError != nil {
+				// Database connection check failed
+				if ds.autoMigrate {
+					log.Printf("[DevServer] Warning: Database connection failed - auto-migrate disabled for this build")
+					log.Printf("[DevServer] Database error: %v", migrationStatus.DatabaseError)
+				}
+			} else if len(migrationStatus.Pending) > 0 {
+				// Migrations detected on initial start
+				if err := ds.handleMigrations(migrationStatus); err != nil {
+					log.Printf("[DevServer] Migration handling failed: %v", err)
+					ds.displayMigrationWarning(migrationStatus)
+				}
+			}
+
 			// Start app server
 			if err := ds.startAppServer(); err != nil {
 				log.Printf("[DevServer] Failed to start app server: %v", err)
@@ -216,6 +252,10 @@ func (ds *DevServer) handleFileChange(files []string) error {
 func (ds *DevServer) handleBackendChange(files []string, impact *ChangeImpact) error {
 	start := time.Now()
 
+	if ds.verbose {
+		log.Printf("[DevServer] Processing %d changed files: %v", len(files), files)
+	}
+
 	// Incremental build
 	result, err := ds.compiler.IncrementalBuild(files)
 	if err != nil {
@@ -246,7 +286,15 @@ func (ds *DevServer) handleBackendChange(files []string, impact *ChangeImpact) e
 
 	log.Printf("[DevServer] ✓ Build successful (%.0fms)", result.Duration.Seconds()*1000)
 
+	// Generate migrations if schema changed
+	if err := ds.compiler.HandleMigrations(); err != nil {
+		log.Printf("[DevServer] Warning: Migration generation failed: %v", err)
+	}
+
 	// Build Go binary
+	if ds.verbose {
+		log.Printf("[DevServer] Building Go binary...")
+	}
 	if err := ds.buildBinary(); err != nil {
 		log.Printf("[DevServer] Failed to build binary: %v", err)
 		ds.reloadServer.NotifyError(&ErrorInfo{
@@ -255,8 +303,45 @@ func (ds *DevServer) handleBackendChange(files []string, impact *ChangeImpact) e
 		})
 		return err
 	}
+	if ds.verbose {
+		log.Printf("[DevServer] Go binary built successfully")
+	}
 
-	// Restart server
+	// Check for pending migrations
+	if ds.verbose {
+		log.Printf("[DevServer] Checking for pending migrations...")
+	}
+	migrationStatus, err := build.CheckMigrationStatus()
+	if err != nil {
+		log.Printf("[DevServer] Warning: Failed to check migration status: %v", err)
+		// Don't attempt auto-migration if we can't check status
+		if ds.autoMigrate {
+			log.Printf("[DevServer] Auto-migrate disabled for this build (migration check failed)")
+		}
+	} else if migrationStatus.DatabaseSkipped {
+		// DATABASE_URL not set
+		if ds.autoMigrate {
+			log.Printf("[DevServer] Warning: DATABASE_URL not set - cannot auto-migrate")
+		}
+	} else if migrationStatus.DatabaseError != nil {
+		// Database connection check failed
+		if ds.autoMigrate {
+			log.Printf("[DevServer] Warning: Database connection failed - auto-migrate disabled for this build")
+			log.Printf("[DevServer] Database error: %v", migrationStatus.DatabaseError)
+		}
+	} else if len(migrationStatus.Pending) > 0 {
+		// Migrations detected
+		if err := ds.handleMigrations(migrationStatus); err != nil {
+			log.Printf("[DevServer] Migration handling failed: %v", err)
+			log.Printf("[DevServer] Server NOT restarted (pending migration)")
+
+			// Display warning but don't restart server
+			ds.displayMigrationWarning(migrationStatus)
+			return nil
+		}
+	}
+
+	// Restart server (only if no migrations or migrations were applied successfully)
 	if err := ds.restartAppServer(); err != nil {
 		log.Printf("[DevServer] Failed to restart server: %v", err)
 		ds.reloadServer.NotifyError(&ErrorInfo{
@@ -332,17 +417,21 @@ func (ds *DevServer) startAppServer() error {
 		return fmt.Errorf("failed to start app: %w", err)
 	}
 
+	ds.appProcessMutex.Lock()
 	ds.appProcess = cmd.Process
-	log.Printf("[DevServer] App server started (PID: %d)", ds.appProcess.Pid)
+	pid := ds.appProcess.Pid
+	ds.appProcessMutex.Unlock()
+
+	log.Printf("[DevServer] App server started (PID: %d)", pid)
 
 	// Monitor process in background and clean up if it exits unexpectedly
 	go func() {
 		cmd.Wait()
-		ds.buildMutex.Lock()
+		ds.appProcessMutex.Lock()
 		if ds.appProcess != nil && ds.appProcess.Pid == cmd.Process.Pid {
 			ds.appProcess = nil
 		}
-		ds.buildMutex.Unlock()
+		ds.appProcessMutex.Unlock()
 	}()
 
 	return nil
@@ -350,22 +439,29 @@ func (ds *DevServer) startAppServer() error {
 
 // stopAppServer stops the application server
 func (ds *DevServer) stopAppServer() error {
-	if ds.appProcess == nil {
+	ds.appProcessMutex.Lock()
+	proc := ds.appProcess
+	ds.appProcessMutex.Unlock()
+
+	if proc == nil {
 		return nil
 	}
 
-	log.Printf("[DevServer] Stopping app server (PID: %d)", ds.appProcess.Pid)
+	log.Printf("[DevServer] Stopping app server (PID: %d)", proc.Pid)
 
 	// Send SIGTERM for graceful shutdown
-	if err := ds.appProcess.Signal(syscall.SIGTERM); err != nil {
+	if err := proc.Signal(syscall.SIGTERM); err != nil {
 		// Process might already be dead
+		ds.appProcessMutex.Lock()
+		ds.appProcess = nil
+		ds.appProcessMutex.Unlock()
 		return nil
 	}
 
 	// Wait for process to exit (with timeout)
 	done := make(chan error, 1)
 	go func() {
-		_, err := ds.appProcess.Wait()
+		_, err := proc.Wait()
 		done <- err
 	}()
 
@@ -375,15 +471,22 @@ func (ds *DevServer) stopAppServer() error {
 	case <-time.After(5 * time.Second):
 		// Timeout - force kill
 		log.Printf("[DevServer] Timeout waiting for graceful shutdown, forcing kill")
-		ds.appProcess.Kill()
+		proc.Kill()
 	}
 
+	ds.appProcessMutex.Lock()
 	ds.appProcess = nil
+	ds.appProcessMutex.Unlock()
+
 	return nil
 }
 
 // restartAppServer restarts the application server
 func (ds *DevServer) restartAppServer() error {
+	if ds.verbose {
+		log.Printf("[DevServer] Restarting application server...")
+	}
+
 	if err := ds.stopAppServer(); err != nil {
 		return err
 	}
@@ -516,4 +619,67 @@ func (ds *DevServer) displayErrors(errs []errors.CompilerError) {
 		}
 	}
 	fmt.Fprintln(os.Stderr)
+}
+
+// handleMigrations handles pending migrations based on auto-migrate setting
+func (ds *DevServer) handleMigrations(status *build.MigrationStatus) error {
+	if ds.autoMigrate {
+		// Check if any pending migrations are breaking or involve data loss
+		hasBreaking := status.HasBreaking || status.HasDataLoss
+
+		if hasBreaking {
+			// Require confirmation for breaking migrations
+			log.Printf("[DevServer] WARNING: Pending migrations contain breaking changes or data loss risk")
+
+			migrator := build.NewAutoMigrator(build.AutoMigrateOptions{
+				Mode:        build.AutoMigrateApply,
+				SkipConfirm: false, // Require confirmation for breaking changes
+			})
+
+			if err := migrator.Run(); err != nil {
+				return fmt.Errorf("auto-migrate failed: %w", err)
+			}
+		} else {
+			// Safe migrations - auto-apply without confirmation
+			log.Printf("[DevServer] Auto-applying %d safe migration(s)...", len(status.Pending))
+
+			migrator := build.NewAutoMigrator(build.AutoMigrateOptions{
+				Mode:        build.AutoMigrateApply,
+				SkipConfirm: true,
+			})
+
+			if err := migrator.Run(); err != nil {
+				return fmt.Errorf("auto-migrate failed: %w", err)
+			}
+		}
+
+		log.Printf("[DevServer] ✓ Applied %d migration(s)", len(status.Pending))
+		return nil
+	}
+
+	// Without auto-migrate, return error to prevent server restart
+	return fmt.Errorf("pending migrations require manual application")
+}
+
+// displayMigrationWarning displays a warning about pending migrations
+func (ds *DevServer) displayMigrationWarning(status *build.MigrationStatus) {
+	fmt.Println()
+	fmt.Println(strings.Repeat("=", 70))
+	fmt.Println("⚠️  SCHEMA CHANGED")
+	fmt.Println(strings.Repeat("=", 70))
+	fmt.Println()
+
+	for _, m := range status.Pending {
+		migrationFile := fmt.Sprintf("migrations/%03d_%s.sql", m.Version, m.Name)
+		fmt.Printf("  Created: %s\n", migrationFile)
+	}
+
+	fmt.Println()
+	fmt.Println("  ⚠️  Server NOT restarted (pending migration)")
+	fmt.Println()
+	fmt.Println("  Apply migration:")
+	fmt.Println("    conduit migrate up (in new terminal)")
+	fmt.Println()
+	fmt.Println(strings.Repeat("=", 70))
+	fmt.Println()
 }

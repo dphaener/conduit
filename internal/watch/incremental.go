@@ -12,6 +12,7 @@ import (
 	"github.com/conduit-lang/conduit/internal/compiler/lexer"
 	"github.com/conduit-lang/conduit/internal/compiler/parser"
 	"github.com/conduit-lang/conduit/internal/compiler/typechecker"
+	"github.com/conduit-lang/conduit/internal/tooling/build"
 	"github.com/conduit-lang/conduit/internal/utils"
 )
 
@@ -256,4 +257,97 @@ func (ic *IncrementalCompiler) FullBuild() (*CompileResult, error) {
 // ClearCache clears the resource cache
 func (ic *IncrementalCompiler) ClearCache() {
 	ic.resourceCache = make(map[string][]*ast.ResourceNode)
+}
+
+// HandleMigrations checks for schema changes and generates migrations if needed
+func (ic *IncrementalCompiler) HandleMigrations() error {
+	// Gather all resources from cache
+	allResources := make([]*ast.ResourceNode, 0)
+	for _, resources := range ic.resourceCache {
+		allResources = append(allResources, resources...)
+	}
+
+	if len(allResources) == 0 {
+		return nil
+	}
+
+	// Create a minimal compiled file structure for migration handling
+	program := &ast.Program{
+		Resources: allResources,
+	}
+
+	// Extract current schemas
+	extractor := build.NewSchemaExtractor()
+	compiled := []*build.CompiledFile{
+		{
+			Program: program,
+		},
+	}
+	currentSchemas, err := extractor.ExtractSchemas(compiled)
+	if err != nil {
+		return fmt.Errorf("failed to extract schemas: %w", err)
+	}
+
+	if len(currentSchemas) == 0 {
+		return nil
+	}
+
+	// Load previous schema snapshot
+	snapshotManager := build.NewSnapshotManager("build")
+	previousSchemas, err := snapshotManager.Load()
+	if err != nil {
+		return fmt.Errorf("failed to load schema snapshot: %w", err)
+	}
+
+	// Initialize migration builder
+	migrationBuilder := build.NewMigrationBuilder()
+	migrationsDir := "migrations"
+
+	if previousSchemas == nil {
+		// First build: check if we should generate initial migration
+		shouldGenerate, err := migrationBuilder.ShouldGenerateInitialMigration(migrationsDir)
+		if err != nil {
+			return fmt.Errorf("failed to check initial migration status: %w", err)
+		}
+
+		if shouldGenerate {
+			// Generate initial migration
+			initialSQL, err := migrationBuilder.GenerateInitialMigration(currentSchemas)
+			if err != nil {
+				return fmt.Errorf("failed to generate initial migration: %w", err)
+			}
+
+			// Write to migrations/001_init.sql
+			if err := os.MkdirAll(migrationsDir, 0755); err != nil {
+				return fmt.Errorf("failed to create migrations directory: %w", err)
+			}
+
+			initPath := filepath.Join(migrationsDir, "001_init.sql")
+			if err := os.WriteFile(initPath, []byte(initialSQL), 0644); err != nil {
+				return fmt.Errorf("failed to write initial migration: %w", err)
+			}
+		}
+	} else {
+		// Generate versioned migration if schema changed
+		result, err := migrationBuilder.GenerateVersionedMigration(
+			previousSchemas,
+			currentSchemas,
+			migrationsDir,
+		)
+		if err != nil {
+			return fmt.Errorf("failed to generate versioned migration: %w", err)
+		}
+
+		// Result is available but we don't need to report it here
+		// The caller will check for pending migrations
+		_ = result
+	}
+
+	// Save current schema snapshot for next build
+	timestamp := time.Now().Unix()
+	if err := snapshotManager.Save(currentSchemas, timestamp); err != nil {
+		return fmt.Errorf("failed to save schema snapshot: %w", err)
+	}
+
+	return nil
 }
