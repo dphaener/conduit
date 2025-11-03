@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
+	"gopkg.in/yaml.v3"
 
 	"github.com/conduit-lang/conduit/internal/cli/config"
 	"github.com/conduit-lang/conduit/internal/cli/ui"
@@ -21,7 +23,62 @@ var (
 	outputFormat string
 	verbose      bool
 	noColor      bool
+	metadataFile string
 )
+
+// loadMetadataFromFile loads metadata from the specified file or default location.
+func loadMetadataFromFile() error {
+	// Determine metadata file path
+	path := metadataFile
+	if path == "" {
+		path = "build/introspection/metadata.json"
+	}
+
+	// Validate and normalize path
+	cleanPath := filepath.Clean(path)
+
+	// Must be within build/ directory (using absolute path comparison)
+	absPath, err := filepath.Abs(cleanPath)
+	if err != nil {
+		return fmt.Errorf("invalid metadata path: %w", err)
+	}
+
+	buildDir, err := filepath.Abs("build")
+	if err != nil {
+		return fmt.Errorf("failed to resolve build directory: %w", err)
+	}
+
+	// Ensure the resolved path is within build/ directory
+	if !strings.HasPrefix(absPath, buildDir+string(filepath.Separator)) {
+		return fmt.Errorf("metadata file must be in build/ directory, got: %s", cleanPath)
+	}
+
+	// Verify the file is a regular file (not a symlink or directory)
+	fileInfo, err := os.Lstat(absPath) // Lstat doesn't follow symlinks
+	if err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("metadata file not found: %s\n\nRun 'conduit build' first to generate metadata.", cleanPath)
+		}
+		return fmt.Errorf("failed to access metadata file: %w", err)
+	}
+
+	if !fileInfo.Mode().IsRegular() {
+		return fmt.Errorf("metadata path must be a regular file, not a %s", fileInfo.Mode().Type())
+	}
+
+	// Read metadata file
+	data, err := os.ReadFile(absPath)
+	if err != nil {
+		return fmt.Errorf("failed to read metadata file: %w", err)
+	}
+
+	// Register metadata in the global registry
+	if err := metadata.RegisterMetadata(data); err != nil {
+		return fmt.Errorf("failed to register metadata: %w", err)
+	}
+
+	return nil
+}
 
 // NewIntrospectCommand creates the introspect command group
 func NewIntrospectCommand() *cobra.Command {
@@ -62,18 +119,26 @@ accurate, up-to-date information about your application's structure.`,
 
   # Verbose output with all details
   conduit introspect resource Post --verbose`,
-		PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 			// Disable color output if requested
 			if noColor {
 				color.NoColor = true
 			}
+
+			// Load metadata from file
+			if err := loadMetadataFromFile(); err != nil {
+				return err
+			}
+
+			return nil
 		},
 	}
 
 	// Add global flags
-	cmd.PersistentFlags().StringVar(&outputFormat, "format", "table", "Output format: json or table")
+	cmd.PersistentFlags().StringVar(&outputFormat, "format", "table", "Output format: json, yaml, or table")
 	cmd.PersistentFlags().BoolVar(&verbose, "verbose", false, "Show all details")
 	cmd.PersistentFlags().BoolVar(&noColor, "no-color", false, "Disable colored output")
+	cmd.PersistentFlags().StringVar(&metadataFile, "metadata", "", "Path to metadata.json file (default: build/introspection/metadata.json)")
 
 	// Add subcommands (placeholders for now - will be implemented in future tickets)
 	cmd.AddCommand(newIntrospectResourcesCommand())
@@ -129,13 +194,17 @@ associated with the resource.`,
 // newIntrospectRoutesCommand creates the 'introspect routes' command
 func newIntrospectRoutesCommand() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "routes",
-		Short: "List all HTTP routes",
+		Use:     "routes",
+		Aliases: []string{"endpoints"},
+		Short:   "List all HTTP routes",
 		Long: `List all HTTP routes in the application.
 
 Shows the HTTP method, path, handler, and middleware for each route.`,
 		Example: `  # List all routes
   conduit introspect routes
+
+  # List all endpoints (alias)
+  conduit introspect endpoints
 
   # Filter by HTTP method
   conduit introspect routes --method GET
@@ -240,9 +309,6 @@ func runIntrospectDepsCommand(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
 			return handleResourceNotFound(resourceName, cmd.OutOrStdout())
-		}
-		if strings.Contains(err.Error(), "not initialized") {
-			return fmt.Errorf("registry not initialized - run 'conduit build' first to generate metadata")
 		}
 		return err
 	}
@@ -603,6 +669,27 @@ func (f *JSONFormatter) Format(data interface{}) error {
 	return encoder.Encode(data)
 }
 
+// YAMLFormatter formats output as YAML
+type YAMLFormatter struct {
+	writer io.Writer
+}
+
+// NewYAMLFormatter creates a new YAML formatter
+func NewYAMLFormatter(w io.Writer) *YAMLFormatter {
+	if w == nil {
+		w = os.Stdout
+	}
+	return &YAMLFormatter{writer: w}
+}
+
+// Format formats data as YAML
+func (f *YAMLFormatter) Format(data interface{}) error {
+	encoder := yaml.NewEncoder(f.writer)
+	encoder.SetIndent(2)
+	defer encoder.Close()
+	return encoder.Encode(data)
+}
+
 // GetFormatter returns the appropriate formatter based on the format parameter
 func GetFormatter(format string, writer io.Writer) (Formatter, error) {
 	if writer == nil {
@@ -612,10 +699,12 @@ func GetFormatter(format string, writer io.Writer) (Formatter, error) {
 	switch f {
 	case "json":
 		return NewJSONFormatter(writer), nil
+	case "yaml", "yml":
+		return NewYAMLFormatter(writer), nil
 	case "table":
 		return NewTableFormatter(writer), nil
 	default:
-		return nil, fmt.Errorf("unsupported format: %s (supported: json, table)", format)
+		return nil, fmt.Errorf("unsupported format: %s (supported: json, yaml, table)", format)
 	}
 }
 
@@ -623,20 +712,20 @@ func GetFormatter(format string, writer io.Writer) (Formatter, error) {
 func runIntrospectResourcesCommand(cmd *cobra.Command, args []string) error {
 	// Get resources from the registry
 	resources := metadata.QueryResources()
-	if resources == nil {
-		return fmt.Errorf("registry not initialized - run 'conduit build' first to generate metadata")
-	}
 
 	// Get the output writer
 	writer := cmd.OutOrStdout()
 
 	// Format output based on the format flag
-	if outputFormat == "json" {
+	switch strings.ToLower(outputFormat) {
+	case "json":
 		return formatResourcesAsJSON(resources, writer)
+	case "yaml", "yml":
+		return formatResourcesAsYAML(resources, writer)
+	default:
+		// Default: table format
+		return formatResourcesAsTable(resources, writer, verbose)
 	}
-
-	// Default: table format
-	return formatResourcesAsTable(resources, writer, verbose)
 }
 
 // ResourceCategory represents a category of resources
@@ -868,31 +957,48 @@ func formatResourcesAsTable(resources []metadata.ResourceMetadata, writer io.Wri
 
 // formatResourcesAsJSON formats resources as JSON
 func formatResourcesAsJSON(resources []metadata.ResourceMetadata, writer io.Writer) error {
-	// Create summary data for JSON output
-	type JSONResourceSummary struct {
-		Name              string              `json:"name"`
-		FieldCount        int                 `json:"field_count"`
-		RelationshipCount int                 `json:"relationship_count"`
-		HookCount         int                 `json:"hook_count"`
-		ValidationCount   int                 `json:"validation_count"`
-		ConstraintCount   int                 `json:"constraint_count"`
-		Middleware        map[string][]string `json:"middleware,omitempty"`
-		Category          string              `json:"category"`
-		Flags             []string            `json:"flags,omitempty"`
+	output := buildResourceSummaryOutput(resources)
+	encoder := json.NewEncoder(writer)
+	encoder.SetIndent("", "  ")
+	return encoder.Encode(output)
+}
+
+// formatResourcesAsYAML formats resources as YAML
+func formatResourcesAsYAML(resources []metadata.ResourceMetadata, writer io.Writer) error {
+	output := buildResourceSummaryOutput(resources)
+	encoder := yaml.NewEncoder(writer)
+	encoder.SetIndent(2)
+	defer encoder.Close()
+	return encoder.Encode(output)
+}
+
+// buildResourceSummaryOutput builds the structured output for resources
+func buildResourceSummaryOutput(resources []metadata.ResourceMetadata) interface{} {
+	// Create summary data for structured output
+	type ResourceSummary struct {
+		Name              string              `json:"name" yaml:"name"`
+		FieldCount        int                 `json:"field_count" yaml:"field_count"`
+		RelationshipCount int                 `json:"relationship_count" yaml:"relationship_count"`
+		HookCount         int                 `json:"hook_count" yaml:"hook_count"`
+		ValidationCount   int                 `json:"validation_count" yaml:"validation_count"`
+		ConstraintCount   int                 `json:"constraint_count" yaml:"constraint_count"`
+		Middleware        map[string][]string `json:"middleware,omitempty" yaml:"middleware,omitempty"`
+		Category          string              `json:"category" yaml:"category"`
+		Flags             []string            `json:"flags,omitempty" yaml:"flags,omitempty"`
 	}
 
-	type JSONOutput struct {
-		TotalCount int                   `json:"total_count"`
-		Resources  []JSONResourceSummary `json:"resources"`
+	type Output struct {
+		TotalCount int               `json:"total_count" yaml:"total_count"`
+		Resources  []ResourceSummary `json:"resources" yaml:"resources"`
 	}
 
-	output := JSONOutput{
+	output := Output{
 		TotalCount: len(resources),
-		Resources:  make([]JSONResourceSummary, 0, len(resources)),
+		Resources:  make([]ResourceSummary, 0, len(resources)),
 	}
 
 	for _, res := range resources {
-		summary := JSONResourceSummary{
+		summary := ResourceSummary{
 			Name:              res.Name,
 			FieldCount:        len(res.Fields),
 			RelationshipCount: len(res.Relationships),
@@ -926,9 +1032,7 @@ func formatResourcesAsJSON(resources []metadata.ResourceMetadata, writer io.Writ
 		output.Resources = append(output.Resources, summary)
 	}
 
-	encoder := json.NewEncoder(writer)
-	encoder.SetIndent("", "  ")
-	return encoder.Encode(output)
+	return output
 }
 
 // runIntrospectResourceCommand executes the 'introspect resource <name>' command
@@ -946,12 +1050,15 @@ func runIntrospectResourceCommand(cmd *cobra.Command, args []string) error {
 	writer := cmd.OutOrStdout()
 
 	// Format output based on the format flag
-	if outputFormat == "json" {
+	switch strings.ToLower(outputFormat) {
+	case "json":
 		return formatResourceAsJSON(resource, writer)
+	case "yaml", "yml":
+		return formatResourceAsYAML(resource, writer)
+	default:
+		// Default: table format
+		return formatResourceAsTable(resource, writer, verbose)
 	}
-
-	// Default: table format
-	return formatResourceAsTable(resource, writer, verbose)
 }
 
 // handleResourceNotFound handles the case when a resource is not found
@@ -959,9 +1066,6 @@ func runIntrospectResourceCommand(cmd *cobra.Command, args []string) error {
 func handleResourceNotFound(name string, writer io.Writer) error {
 	// Get all resources for fuzzy matching
 	resources := metadata.QueryResources()
-	if resources == nil {
-		return fmt.Errorf("registry not initialized - run 'conduit build' first to generate metadata")
-	}
 
 	// Extract resource names for fuzzy matching
 	resourceNames := make([]string, len(resources))
@@ -1253,13 +1357,18 @@ func formatResourceAsJSON(resource *metadata.ResourceMetadata, writer io.Writer)
 	return encoder.Encode(resource)
 }
 
+// formatResourceAsYAML formats a single resource as YAML
+func formatResourceAsYAML(resource *metadata.ResourceMetadata, writer io.Writer) error {
+	encoder := yaml.NewEncoder(writer)
+	encoder.SetIndent(2)
+	defer encoder.Close()
+	return encoder.Encode(resource)
+}
+
 // runIntrospectRoutesCommand executes the 'introspect routes' command
 func runIntrospectRoutesCommand(cmd *cobra.Command, args []string) error {
 	// Get all routes from the registry
 	routes := metadata.QueryRoutes()
-	if routes == nil {
-		return fmt.Errorf("registry not initialized - run 'conduit build' first to generate metadata")
-	}
 
 	// Load config to get API prefix
 	cfg, _ := config.Load()
@@ -1285,12 +1394,15 @@ func runIntrospectRoutesCommand(cmd *cobra.Command, args []string) error {
 	writer := cmd.OutOrStdout()
 
 	// Format output based on the format flag
-	if outputFormat == "json" {
+	switch strings.ToLower(outputFormat) {
+	case "json":
 		return formatRoutesAsJSON(filteredRoutes, apiPrefix, writer)
+	case "yaml", "yml":
+		return formatRoutesAsYAML(filteredRoutes, apiPrefix, writer)
+	default:
+		// Default: table format
+		return formatRoutesAsTable(filteredRoutes, apiPrefix, writer)
 	}
-
-	// Default: table format
-	return formatRoutesAsTable(filteredRoutes, apiPrefix, writer)
 }
 
 // filterRoutes applies filtering logic to routes based on the provided filters
@@ -1385,19 +1497,36 @@ func formatRoutesAsTable(routes []metadata.RouteMetadata, apiPrefix string, writ
 
 // formatRoutesAsJSON formats routes as JSON
 func formatRoutesAsJSON(routes []metadata.RouteMetadata, apiPrefix string, writer io.Writer) error {
+	output := buildRoutesOutput(routes, apiPrefix)
+	encoder := json.NewEncoder(writer)
+	encoder.SetIndent("", "  ")
+	return encoder.Encode(output)
+}
+
+// formatRoutesAsYAML formats routes as YAML
+func formatRoutesAsYAML(routes []metadata.RouteMetadata, apiPrefix string, writer io.Writer) error {
+	output := buildRoutesOutput(routes, apiPrefix)
+	encoder := yaml.NewEncoder(writer)
+	encoder.SetIndent(2)
+	defer encoder.Close()
+	return encoder.Encode(output)
+}
+
+// buildRoutesOutput builds the structured output for routes
+func buildRoutesOutput(routes []metadata.RouteMetadata, apiPrefix string) interface{} {
 	type RouteWithPrefix struct {
-		Method     string   `json:"method"`
-		Path       string   `json:"path"`
-		Handler    string   `json:"handler"`
-		Resource   string   `json:"resource,omitempty"`
-		Operation  string   `json:"operation,omitempty"`
-		Middleware []string `json:"middleware,omitempty"`
+		Method     string   `json:"method" yaml:"method"`
+		Path       string   `json:"path" yaml:"path"`
+		Handler    string   `json:"handler" yaml:"handler"`
+		Resource   string   `json:"resource,omitempty" yaml:"resource,omitempty"`
+		Operation  string   `json:"operation,omitempty" yaml:"operation,omitempty"`
+		Middleware []string `json:"middleware,omitempty" yaml:"middleware,omitempty"`
 	}
 
-	type JSONOutput struct {
-		TotalCount int               `json:"total_count"`
-		APIPrefix  string            `json:"api_prefix,omitempty"`
-		Routes     []RouteWithPrefix `json:"routes"`
+	type Output struct {
+		TotalCount int               `json:"total_count" yaml:"total_count"`
+		APIPrefix  string            `json:"api_prefix,omitempty" yaml:"api_prefix,omitempty"`
+		Routes     []RouteWithPrefix `json:"routes" yaml:"routes"`
 	}
 
 	// Build routes with prefix applied
@@ -1418,15 +1547,11 @@ func formatRoutesAsJSON(routes []metadata.RouteMetadata, apiPrefix string, write
 		})
 	}
 
-	output := JSONOutput{
+	return Output{
 		TotalCount: len(routes),
 		APIPrefix:  apiPrefix,
 		Routes:     routesWithPrefix,
 	}
-
-	encoder := json.NewEncoder(writer)
-	encoder.SetIndent("", "  ")
-	return encoder.Encode(output)
 }
 
 // runIntrospectPatternsCommand executes the 'introspect patterns [category]' command
@@ -1447,9 +1572,6 @@ func runIntrospectPatternsCommand(cmd *cobra.Command, args []string) error {
 
 	// Query all patterns from the registry
 	patterns := metadata.QueryPatterns()
-	if patterns == nil {
-		return fmt.Errorf("registry not initialized - run 'conduit build' first to generate metadata")
-	}
 
 	// Filter by category if specified
 	if categoryFilter != "" {
