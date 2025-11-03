@@ -49,7 +49,7 @@ func TestMemory_5000LOC(t *testing.T) {
 	}
 
 	gen := codegen.NewGenerator()
-	_, err := gen.GenerateProgram(prog, "test-app", "")
+	_, err := gen.GenerateProgram(prog, "test-app", "", "")
 	if err != nil {
 		t.Fatalf("Code generation error: %v", err)
 	}
@@ -92,7 +92,7 @@ func TestMemory_SimpleResource(t *testing.T) {
 	tc := typechecker.NewTypeChecker()
 	_ = tc.CheckProgram(prog)
 	gen := codegen.NewGenerator()
-	_, _ = gen.GenerateProgram(prog, "test-app", "")
+	_, _ = gen.GenerateProgram(prog, "test-app", "", "")
 
 	var memAfter runtime.MemStats
 	runtime.ReadMemStats(&memAfter)
@@ -133,7 +133,7 @@ func TestMemory_TypicalProject(t *testing.T) {
 	tc := typechecker.NewTypeChecker()
 	_ = tc.CheckProgram(prog)
 	gen := codegen.NewGenerator()
-	_, _ = gen.GenerateProgram(prog, "test-app", "")
+	_, _ = gen.GenerateProgram(prog, "test-app", "", "")
 
 	var memAfter runtime.MemStats
 	runtime.ReadMemStats(&memAfter)
@@ -212,7 +212,7 @@ func BenchmarkMemory_CodeGenerator(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		gen := codegen.NewGenerator()
-		_, _ = gen.GenerateProgram(prog, "test-app", "")
+		_, _ = gen.GenerateProgram(prog, "test-app", "", "")
 	}
 }
 
@@ -231,7 +231,7 @@ func BenchmarkMemory_FullPipeline(b *testing.B) {
 		tc := typechecker.NewTypeChecker()
 		_ = tc.CheckProgram(prog)
 		gen := codegen.NewGenerator()
-		_, _ = gen.GenerateProgram(prog, "test-app", "")
+		_, _ = gen.GenerateProgram(prog, "test-app", "", "")
 	}
 }
 
@@ -254,7 +254,7 @@ func TestMemory_NoLeaks(t *testing.T) {
 		tc := typechecker.NewTypeChecker()
 		_ = tc.CheckProgram(prog)
 		gen := codegen.NewGenerator()
-		_, _ = gen.GenerateProgram(prog, "test-app", "")
+		_, _ = gen.GenerateProgram(prog, "test-app", "", "")
 	}
 
 	// Force garbage collection
@@ -302,7 +302,7 @@ func TestMemory_LargeSource(t *testing.T) {
 		tc := typechecker.NewTypeChecker()
 		_ = tc.CheckProgram(prog)
 		gen := codegen.NewGenerator()
-		_, _ = gen.GenerateProgram(prog, "test-app", "")
+		_, _ = gen.GenerateProgram(prog, "test-app", "", "")
 
 		var memAfter runtime.MemStats
 		runtime.ReadMemStats(&memAfter)

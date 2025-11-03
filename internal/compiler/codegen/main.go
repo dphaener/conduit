@@ -5,7 +5,7 @@ import (
 )
 
 // GenerateMain generates the main.go entry point
-func (g *Generator) GenerateMain(resources []*ast.ResourceNode, moduleName string) (string, error) {
+func (g *Generator) GenerateMain(resources []*ast.ResourceNode, moduleName string, apiPrefix string) (string, error) {
 	g.reset()
 
 	// Package declaration
@@ -27,13 +27,13 @@ func (g *Generator) GenerateMain(resources []*ast.ResourceNode, moduleName strin
 	g.writeLine("")
 
 	// Generate main function
-	g.generateMainFunction(resources)
+	g.generateMainFunction(resources, apiPrefix)
 
 	return g.buf.String(), nil
 }
 
 // generateMainFunction generates the main() function
-func (g *Generator) generateMainFunction(resources []*ast.ResourceNode) {
+func (g *Generator) generateMainFunction(resources []*ast.ResourceNode, apiPrefix string) {
 	g.writeLine("func main() {")
 	g.indent++
 
@@ -61,21 +61,33 @@ func (g *Generator) generateMainFunction(resources []*ast.ResourceNode) {
 	g.writeLine("r.Use(middleware.RealIP)")
 	g.writeLine("")
 
-	// Register routes for each resource
-	g.writeLine("// Register resource routes")
-	for _, resource := range resources {
-		g.writeLine("handlers.Register%sRoutes(r, db)", resource.Name)
-	}
-	g.writeLine("")
-
-	// Health check endpoint
-	g.writeLine("// Health check endpoint")
+	// Health check endpoint (always outside prefix)
+	g.writeLine("// Health check endpoint (outside API prefix)")
 	g.writeLine("r.Get(\"/health\", func(w http.ResponseWriter, r *http.Request) {")
 	g.indent++
 	g.writeLine("w.WriteHeader(http.StatusOK)")
 	g.writeLine("w.Write([]byte(\"OK\"))")
 	g.indent--
 	g.writeLine("})")
+	g.writeLine("")
+
+	// Register routes for each resource
+	// Wrap in r.Route(prefix, ...) if prefix is configured
+	if apiPrefix != "" {
+		g.writeLine("// Register resource routes with API prefix: %s", apiPrefix)
+		g.writeLine("r.Route(\"%s\", func(r chi.Router) {", apiPrefix)
+		g.indent++
+		for _, resource := range resources {
+			g.writeLine("handlers.Register%sRoutes(r, db)", resource.Name)
+		}
+		g.indent--
+		g.writeLine("})")
+	} else {
+		g.writeLine("// Register resource routes")
+		for _, resource := range resources {
+			g.writeLine("handlers.Register%sRoutes(r, db)", resource.Name)
+		}
+	}
 	g.writeLine("")
 
 	// Start server
@@ -89,7 +101,11 @@ func (g *Generator) generateMainFunction(resources []*ast.ResourceNode) {
 	g.writeLine("")
 
 	g.writeLine("addr := fmt.Sprintf(\":%s\", port)")
-	g.writeLine("log.Printf(\"Server starting on %s\", addr)")
+	if apiPrefix != "" {
+		g.writeLine("log.Printf(\"Server starting on %%s with API prefix: %s\", addr)", apiPrefix)
+	} else {
+		g.writeLine("log.Printf(\"Server starting on %s\", addr)")
+	}
 	g.writeLine("")
 
 	g.writeLine("if err := http.ListenAndServe(addr, r); err != nil {")

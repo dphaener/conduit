@@ -27,7 +27,7 @@ func NewGenerator() *Generator {
 }
 
 // GenerateProgram generates Go code for an entire program
-func (g *Generator) GenerateProgram(prog *ast.Program, moduleName string, conduitPath string) (map[string]string, error) {
+func (g *Generator) GenerateProgram(prog *ast.Program, moduleName string, conduitPath string, apiPrefix string) (map[string]string, error) {
 	files := make(map[string]string)
 
 	// Generate go.mod file
@@ -51,7 +51,7 @@ func (g *Generator) GenerateProgram(prog *ast.Program, moduleName string, condui
 	files["handlers/handlers.go"] = handlers
 
 	// Generate main entry point
-	mainCode, err := g.GenerateMain(prog.Resources, moduleName)
+	mainCode, err := g.GenerateMain(prog.Resources, moduleName, apiPrefix)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate main: %w", err)
 	}

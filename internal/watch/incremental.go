@@ -131,7 +131,7 @@ func (ic *IncrementalCompiler) IncrementalBuild(changedFiles []string) (*Compile
 	moduleName := filepath.Base(cwd)
 
 	gen := codegen.NewGenerator()
-	files, err := gen.GenerateProgram(program, moduleName, "")
+	files, err := gen.GenerateProgram(program, moduleName, "", "")
 	if err != nil {
 		result.Errors = append(result.Errors, errors.CompilerError{
 			Phase:    "codegen",

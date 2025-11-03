@@ -598,7 +598,7 @@ func TestFormatRoutesAsTable(t *testing.T) {
 		buf := &bytes.Buffer{}
 		noColor = true
 
-		err := formatRoutesAsTable(routes, buf)
+		err := formatRoutesAsTable(routes, "", buf)
 		require.NoError(t, err)
 
 		output := buf.String()
@@ -619,7 +619,7 @@ func TestFormatRoutesAsTable(t *testing.T) {
 		buf := &bytes.Buffer{}
 		noColor = true
 
-		err := formatRoutesAsTable([]metadata.RouteMetadata{}, buf)
+		err := formatRoutesAsTable([]metadata.RouteMetadata{}, "", buf)
 		require.NoError(t, err)
 
 		output := buf.String()
@@ -638,7 +638,7 @@ func TestFormatRoutesAsTable(t *testing.T) {
 			},
 		}
 
-		err := formatRoutesAsTable(routesNoMw, buf)
+		err := formatRoutesAsTable(routesNoMw, "", buf)
 		require.NoError(t, err)
 
 		output := buf.String()
@@ -676,7 +676,7 @@ func TestFormatRoutesAsJSON(t *testing.T) {
 	t.Run("formats JSON correctly", func(t *testing.T) {
 		buf := &bytes.Buffer{}
 
-		err := formatRoutesAsJSON(routes, buf)
+		err := formatRoutesAsJSON(routes, "", buf)
 		require.NoError(t, err)
 
 		// Parse JSON
@@ -701,7 +701,7 @@ func TestFormatRoutesAsJSON(t *testing.T) {
 	t.Run("handles empty routes", func(t *testing.T) {
 		buf := &bytes.Buffer{}
 
-		err := formatRoutesAsJSON([]metadata.RouteMetadata{}, buf)
+		err := formatRoutesAsJSON([]metadata.RouteMetadata{}, "", buf)
 		require.NoError(t, err)
 
 		var result struct {

@@ -612,7 +612,7 @@ func (s *System) generateGoCode(compiled []*CompiledFile) (map[string]string, er
 
 	// Generate code (empty conduitPath for now - will be resolved by go mod tidy)
 	gen := codegen.NewGenerator()
-	files, err := gen.GenerateProgram(program, moduleName, "")
+	files, err := gen.GenerateProgram(program, moduleName, "", "")
 	if err != nil {
 		return nil, err
 	}
