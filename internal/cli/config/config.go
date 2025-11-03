@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/viper"
 )
@@ -23,8 +24,9 @@ type DatabaseConfig struct {
 
 // ServerConfig represents server configuration
 type ServerConfig struct {
-	Port int    `mapstructure:"port"`
-	Host string `mapstructure:"host"`
+	Port      int    `mapstructure:"port"`
+	Host      string `mapstructure:"host"`
+	APIPrefix string `mapstructure:"api_prefix"`
 }
 
 // BuildConfig represents build configuration
@@ -40,6 +42,7 @@ func Load() (*Config, error) {
 	// Set defaults
 	v.SetDefault("server.port", 3000)
 	v.SetDefault("server.host", "localhost")
+	v.SetDefault("server.api_prefix", "")
 	v.SetDefault("build.output", "build/app")
 	v.SetDefault("build.generated_dir", "build/generated")
 
@@ -62,6 +65,11 @@ func Load() (*Config, error) {
 	var config Config
 	if err := v.Unmarshal(&config); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
+	}
+
+	// Validate configuration
+	if err := validateConfig(&config); err != nil {
+		return nil, err
 	}
 
 	return &config, nil
@@ -130,4 +138,18 @@ func GetProjectRoot() (string, error) {
 		}
 		dir = parent
 	}
+}
+
+// validateConfig validates the configuration
+func validateConfig(cfg *Config) error {
+	// Validate API prefix format
+	if cfg.Server.APIPrefix != "" {
+		if !strings.HasPrefix(cfg.Server.APIPrefix, "/") {
+			return fmt.Errorf("server.api_prefix must start with '/', got: %s", cfg.Server.APIPrefix)
+		}
+		if strings.HasSuffix(cfg.Server.APIPrefix, "/") {
+			return fmt.Errorf("server.api_prefix must not end with '/', got: %s", cfg.Server.APIPrefix)
+		}
+	}
+	return nil
 }

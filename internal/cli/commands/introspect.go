@@ -11,6 +11,7 @@ import (
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 
+	"github.com/conduit-lang/conduit/internal/cli/config"
 	"github.com/conduit-lang/conduit/internal/cli/ui"
 	"github.com/conduit-lang/conduit/runtime/metadata"
 )
@@ -360,6 +361,13 @@ func formatDependenciesAsTable(graph *metadata.DependencyGraph, resourceName str
 	cyan := color.New(color.FgCyan)
 	yellow := color.New(color.FgYellow)
 
+	// Load config to get API prefix
+	cfg, _ := config.Load()
+	apiPrefix := ""
+	if cfg != nil {
+		apiPrefix = cfg.Server.APIPrefix
+	}
+
 	// Header
 	bold.Fprintf(writer, "DEPENDENCIES: %s\n\n", resourceName)
 
@@ -460,7 +468,11 @@ func formatDependenciesAsTable(graph *metadata.DependencyGraph, resourceName str
 		if len(resourceRoutes) > 0 {
 			bold.Fprintln(writer, "Routes:")
 			for _, route := range resourceRoutes {
-				fmt.Fprintf(writer, "└─ %s %s\n", route.Method, route.Path)
+				fullPath := route.Path
+				if apiPrefix != "" && route.Path != "/health" {
+					fullPath = apiPrefix + route.Path
+				}
+				fmt.Fprintf(writer, "└─ %s %s\n", route.Method, fullPath)
 			}
 			fmt.Fprintln(writer)
 		}
@@ -1180,6 +1192,13 @@ func formatResourceAsTable(resource *metadata.ResourceMetadata, writer io.Writer
 	cyan.Fprintln(writer, "━━━ API ENDPOINTS ━━━━━━━━━━━━━━━━━━━━━━━━━")
 	fmt.Fprintln(writer)
 
+	// Load config to get API prefix
+	cfg, _ := config.Load()
+	apiPrefix := ""
+	if cfg != nil {
+		apiPrefix = cfg.Server.APIPrefix
+	}
+
 	// Get all routes and filter by this resource
 	allRoutes := metadata.QueryRoutes()
 	resourceRoutes := []metadata.RouteMetadata{}
@@ -1191,7 +1210,11 @@ func formatResourceAsTable(resource *metadata.ResourceMetadata, writer io.Writer
 
 	if len(resourceRoutes) > 0 {
 		for _, route := range resourceRoutes {
-			fmt.Fprintf(writer, "%s %s → %s", route.Method, route.Path, route.Operation)
+			fullPath := route.Path
+			if apiPrefix != "" && route.Path != "/health" {
+				fullPath = apiPrefix + route.Path
+			}
+			fmt.Fprintf(writer, "%s %s → %s", route.Method, fullPath, route.Operation)
 			if len(route.Middleware) > 0 {
 				yellow.Fprintf(writer, " [%s]", strings.Join(route.Middleware, ", "))
 			}
@@ -1238,6 +1261,13 @@ func runIntrospectRoutesCommand(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("registry not initialized - run 'conduit build' first to generate metadata")
 	}
 
+	// Load config to get API prefix
+	cfg, _ := config.Load()
+	apiPrefix := ""
+	if cfg != nil {
+		apiPrefix = cfg.Server.APIPrefix
+	}
+
 	// Get filter flags
 	methodFilter, _ := cmd.Flags().GetString("method")
 	middlewareFilter, _ := cmd.Flags().GetString("middleware")
@@ -1256,11 +1286,11 @@ func runIntrospectRoutesCommand(cmd *cobra.Command, args []string) error {
 
 	// Format output based on the format flag
 	if outputFormat == "json" {
-		return formatRoutesAsJSON(filteredRoutes, writer)
+		return formatRoutesAsJSON(filteredRoutes, apiPrefix, writer)
 	}
 
 	// Default: table format
-	return formatRoutesAsTable(filteredRoutes, writer)
+	return formatRoutesAsTable(filteredRoutes, apiPrefix, writer)
 }
 
 // filterRoutes applies filtering logic to routes based on the provided filters
@@ -1302,7 +1332,7 @@ func filterRoutes(routes []metadata.RouteMetadata, methodFilter, middlewareFilte
 }
 
 // formatRoutesAsTable formats routes as a human-readable table
-func formatRoutesAsTable(routes []metadata.RouteMetadata, writer io.Writer) error {
+func formatRoutesAsTable(routes []metadata.RouteMetadata, apiPrefix string, writer io.Writer) error {
 	if len(routes) == 0 {
 		fmt.Fprintln(writer, "No routes found.")
 		return nil
@@ -1331,9 +1361,14 @@ func formatRoutesAsTable(routes []metadata.RouteMetadata, writer io.Writer) erro
 			methodColor = defaultColor
 		}
 
-		// Format: METHOD PATH -> HANDLER [MIDDLEWARE]
+		// Format: METHOD PREFIX+PATH -> HANDLER [MIDDLEWARE]
+		fullPath := route.Path
+		if apiPrefix != "" && route.Path != "/health" {
+			fullPath = apiPrefix + route.Path
+		}
+
 		methodColor.Fprintf(writer, "%-6s", route.Method)
-		fmt.Fprintf(writer, " %-30s -> ", route.Path)
+		fmt.Fprintf(writer, " %-30s -> ", fullPath)
 		fmt.Fprintf(writer, "%-20s", route.Handler)
 
 		// Show middleware if present
@@ -1349,15 +1384,44 @@ func formatRoutesAsTable(routes []metadata.RouteMetadata, writer io.Writer) erro
 }
 
 // formatRoutesAsJSON formats routes as JSON
-func formatRoutesAsJSON(routes []metadata.RouteMetadata, writer io.Writer) error {
+func formatRoutesAsJSON(routes []metadata.RouteMetadata, apiPrefix string, writer io.Writer) error {
+	type RouteWithPrefix struct {
+		Method     string   `json:"method"`
+		Path       string   `json:"path"`
+		Handler    string   `json:"handler"`
+		Resource   string   `json:"resource,omitempty"`
+		Operation  string   `json:"operation,omitempty"`
+		Middleware []string `json:"middleware,omitempty"`
+	}
+
 	type JSONOutput struct {
-		TotalCount int                      `json:"total_count"`
-		Routes     []metadata.RouteMetadata `json:"routes"`
+		TotalCount int               `json:"total_count"`
+		APIPrefix  string            `json:"api_prefix,omitempty"`
+		Routes     []RouteWithPrefix `json:"routes"`
+	}
+
+	// Build routes with prefix applied
+	routesWithPrefix := make([]RouteWithPrefix, 0, len(routes))
+	for _, route := range routes {
+		fullPath := route.Path
+		if apiPrefix != "" && route.Path != "/health" {
+			fullPath = apiPrefix + route.Path
+		}
+
+		routesWithPrefix = append(routesWithPrefix, RouteWithPrefix{
+			Method:     route.Method,
+			Path:       fullPath,
+			Handler:    route.Handler,
+			Resource:   route.Resource,
+			Operation:  route.Operation,
+			Middleware: route.Middleware,
+		})
 	}
 
 	output := JSONOutput{
 		TotalCount: len(routes),
-		Routes:     routes,
+		APIPrefix:  apiPrefix,
+		Routes:     routesWithPrefix,
 	}
 
 	encoder := json.NewEncoder(writer)

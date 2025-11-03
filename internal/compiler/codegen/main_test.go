@@ -18,7 +18,7 @@ func TestGenerateMain_Basic(t *testing.T) {
 	}
 
 	gen := NewGenerator()
-	code, err := gen.GenerateMain(resources, "example.com/testapp")
+	code, err := gen.GenerateMain(resources, "example.com/testapp", "")
 	if err != nil {
 		t.Fatalf("GenerateMain failed: %v", err)
 	}
@@ -63,7 +63,7 @@ func TestGenerateMain_MainFunction(t *testing.T) {
 	}
 
 	gen := NewGenerator()
-	code, err := gen.GenerateMain(resources, "example.com/testapp")
+	code, err := gen.GenerateMain(resources, "example.com/testapp", "")
 	if err != nil {
 		t.Fatalf("GenerateMain failed: %v", err)
 	}
@@ -131,7 +131,7 @@ func TestGenerateInitDBFunction(t *testing.T) {
 	}
 
 	gen := NewGenerator()
-	code, err := gen.GenerateMain(resources, "example.com/testapp")
+	code, err := gen.GenerateMain(resources, "example.com/testapp", "")
 	if err != nil {
 		t.Fatalf("GenerateMain failed: %v", err)
 	}
@@ -181,7 +181,7 @@ func TestGenerateMain_PortConfiguration(t *testing.T) {
 	}
 
 	gen := NewGenerator()
-	code, err := gen.GenerateMain(resources, "example.com/testapp")
+	code, err := gen.GenerateMain(resources, "example.com/testapp", "")
 	if err != nil {
 		t.Fatalf("GenerateMain failed: %v", err)
 	}

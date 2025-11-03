@@ -181,3 +181,124 @@ func TestGetProjectRootNotInProject(t *testing.T) {
 		t.Error("expected error when not in a project, got nil")
 	}
 }
+
+func TestAPIPrefixValidation(t *testing.T) {
+	tests := []struct {
+		name      string
+		config    string
+		wantError bool
+		errMsg    string
+	}{
+		{
+			name: "valid prefix with /api/v1",
+			config: `
+server:
+  api_prefix: "/api/v1"
+`,
+			wantError: false,
+		},
+		{
+			name: "valid empty prefix",
+			config: `
+server:
+  api_prefix: ""
+`,
+			wantError: false,
+		},
+		{
+			name: "valid prefix with /v1",
+			config: `
+server:
+  api_prefix: "/v1"
+`,
+			wantError: false,
+		},
+		{
+			name: "invalid prefix without leading slash",
+			config: `
+server:
+  api_prefix: "api/v1"
+`,
+			wantError: true,
+			errMsg:    "must start with '/'",
+		},
+		{
+			name: "invalid prefix with trailing slash",
+			config: `
+server:
+  api_prefix: "/api/v1/"
+`,
+			wantError: true,
+			errMsg:    "must not end with '/'",
+		},
+		{
+			name: "invalid prefix that is just a slash",
+			config: `
+server:
+  api_prefix: "/"
+`,
+			wantError: true,
+			errMsg:    "must not end with '/'",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create temporary directory
+			tmpDir := t.TempDir()
+			oldWd, _ := os.Getwd()
+			os.Chdir(tmpDir)
+			defer os.Chdir(oldWd)
+
+			// Write config file
+			os.WriteFile("conduit.yml", []byte(tt.config), 0644)
+
+			// Load config
+			_, err := Load()
+
+			if tt.wantError {
+				if err == nil {
+					t.Errorf("expected error containing %q, got nil", tt.errMsg)
+				} else if tt.errMsg != "" && !contains(err.Error(), tt.errMsg) {
+					t.Errorf("expected error containing %q, got %q", tt.errMsg, err.Error())
+				}
+			} else {
+				if err != nil {
+					t.Errorf("expected no error, got %v", err)
+				}
+			}
+		})
+	}
+}
+
+func TestAPIPrefixDefault(t *testing.T) {
+	// Test that default value is empty string
+	tmpDir := t.TempDir()
+	oldWd, _ := os.Getwd()
+	os.Chdir(tmpDir)
+	defer os.Chdir(oldWd)
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("expected no error loading defaults, got %v", err)
+	}
+
+	if cfg.Server.APIPrefix != "" {
+		t.Errorf("expected default api_prefix to be empty string, got %q", cfg.Server.APIPrefix)
+	}
+}
+
+// Helper function to check if string contains substring
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) && (s == substr || len(substr) == 0 ||
+		(len(s) > 0 && len(substr) > 0 && indexOfSubstring(s, substr) >= 0))
+}
+
+func indexOfSubstring(s, substr string) int {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return i
+		}
+	}
+	return -1
+}

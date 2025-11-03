@@ -295,8 +295,14 @@ Or run conduit build from the conduit source directory.`)
 		return fmt.Errorf("CONDUIT_ROOT (%s) does not contain pkg/runtime/stdlib.go - is this the correct path?", conduitPath)
 	}
 
+	// Get API prefix from config (default to empty string if not set)
+	apiPrefix := ""
+	if cfg != nil {
+		apiPrefix = cfg.Server.APIPrefix
+	}
+
 	gen := codegen.NewGenerator()
-	files, err := gen.GenerateProgram(program, moduleName, conduitPath)
+	files, err := gen.GenerateProgram(program, moduleName, conduitPath, apiPrefix)
 	if err != nil {
 		return fmt.Errorf("code generation failed: %w", err)
 	}
@@ -395,6 +401,9 @@ Or run conduit build from the conduit source directory.`)
 	fmt.Println()
 	successColor.Printf("✓ Build successful in %.2fs\n", elapsed.Seconds())
 	infoColor.Printf("  Binary: %s\n", outputPath)
+	if apiPrefix != "" {
+		infoColor.Printf("  API Prefix: %s\n", apiPrefix)
+	}
 
 	return nil
 }
