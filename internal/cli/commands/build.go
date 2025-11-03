@@ -330,6 +330,23 @@ Or run conduit build from the conduit source directory.`)
 		}
 	}
 
+	// Copy metadata file to build/introspection for CLI introspection commands
+	if metadataContent, ok := files["introspection/metadata.json"]; ok {
+		introspectionDir := "build/introspection"
+		if err := os.MkdirAll(introspectionDir, 0755); err != nil {
+			return fmt.Errorf("failed to create introspection directory: %w", err)
+		}
+
+		metadataPath := filepath.Join(introspectionDir, "metadata.json")
+		if err := os.WriteFile(metadataPath, []byte(metadataContent), 0644); err != nil {
+			return fmt.Errorf("failed to write metadata for CLI: %w", err)
+		}
+
+		if buildVerbose {
+			infoColor.Printf("  Copied metadata to %s\n", metadataPath)
+		}
+	}
+
 	// Copy migration files to root migrations/ directory so conduit migrate can find them
 	migrationsDir := "migrations"
 	if err := os.MkdirAll(migrationsDir, 0755); err != nil {

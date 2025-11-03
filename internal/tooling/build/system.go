@@ -2,6 +2,7 @@ package build
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -208,10 +209,31 @@ func (s *System) Build(ctx context.Context) (*BuildResult, error) {
 		return nil, fmt.Errorf("binary build failed: %w", err)
 	}
 
-	// Generate metadata
+	if s.options.Verbose {
+		fmt.Printf("[DEBUG] About to call generateMetadata with %d compiled files\n", len(compiled))
+	}
+
+	// Generate metadata for CLI introspection
 	metadataPath, err := s.generateMetadata(compiled)
 	if err != nil {
 		return nil, fmt.Errorf("metadata generation failed: %w", err)
+	}
+
+	if s.options.Verbose {
+		fmt.Printf("[DEBUG] generateMetadata returned: %s\n", metadataPath)
+	}
+
+	// Copy codegen metadata to CLI location for backward compatibility
+	// The codegen package generates metadata.json in build/generated/introspection/
+	// but CLI introspect commands look in build/introspection/
+	srcMeta := filepath.Join(s.options.BuildDir, "generated", "introspection", "metadata.json")
+	if _, err := os.Stat(srcMeta); err == nil {
+		dstMeta := filepath.Join(s.options.BuildDir, "introspection", "metadata-codegen.json")
+		data, err := os.ReadFile(srcMeta)
+		if err == nil {
+			os.MkdirAll(filepath.Dir(dstMeta), 0755)
+			os.WriteFile(dstMeta, data, 0644)
+		}
 	}
 
 	result.Success = true
@@ -756,12 +778,41 @@ func (s *System) buildBinary() (string, error) {
 
 // generateMetadata generates the introspection metadata file
 func (s *System) generateMetadata(compiled []*CompiledFile) (string, error) {
-	// This will be implemented when we add introspection
-	metadataPath := s.options.OutputPath + ".meta.json"
+	if s.options.Verbose {
+		fmt.Printf("[DEBUG] generateMetadata: starting with %d compiled files\n", len(compiled))
+	}
 
-	// For now, create an empty metadata file
-	if err := os.WriteFile(metadataPath, []byte("{}"), 0644); err != nil {
+	// Extract metadata from compiled AST
+	extractor := NewMetadataExtractor()
+	meta, err := extractor.Extract(compiled)
+	if err != nil {
+		return "", fmt.Errorf("failed to extract metadata: %w", err)
+	}
+
+	if s.options.Verbose {
+		fmt.Printf("[DEBUG] generateMetadata: extracted metadata successfully\n")
+	}
+
+	// Serialize to JSON
+	data, err := json.Marshal(meta)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal metadata: %w", err)
+	}
+
+	// Write to build/introspection/metadata.json for CLI introspection commands
+	metadataPath := filepath.Join(s.options.BuildDir, "introspection", "metadata.json")
+	if err := os.MkdirAll(filepath.Dir(metadataPath), 0755); err != nil {
+		return "", fmt.Errorf("failed to create metadata directory: %w", err)
+	}
+
+	if err := os.WriteFile(metadataPath, data, 0644); err != nil {
 		return "", fmt.Errorf("failed to write metadata: %w", err)
+	}
+
+	// Also write to legacy location for backward compatibility
+	legacyPath := s.options.OutputPath + ".meta.json"
+	if err := os.WriteFile(legacyPath, data, 0644); err != nil {
+		return "", fmt.Errorf("failed to write legacy metadata: %w", err)
 	}
 
 	return metadataPath, nil

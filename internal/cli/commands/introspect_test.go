@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/conduit-lang/conduit/internal/cli/ui"
 	"github.com/conduit-lang/conduit/runtime/metadata"
 )
 
@@ -167,17 +168,27 @@ func TestRunIntrospectResourcesCommand(t *testing.T) {
 		}
 	}
 
-	t.Run("returns error when registry not initialized", func(t *testing.T) {
-		// Reset registry to ensure it's empty
+	t.Run("handles empty registry gracefully", func(t *testing.T) {
+		// Setup empty registry
 		metadata.Reset()
+		emptyMeta := &metadata.Metadata{
+			Version:   "1.0.0",
+			Generated: time.Now(),
+			Resources: []metadata.ResourceMetadata{},
+		}
+		data, err := json.Marshal(emptyMeta)
+		require.NoError(t, err)
+		err = metadata.RegisterMetadata(data)
+		require.NoError(t, err)
 
 		cmd := newIntrospectResourcesCommand()
 		buf := &bytes.Buffer{}
 		cmd.SetOut(buf)
 
-		err := cmd.RunE(cmd, []string{})
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "registry not initialized")
+		err = cmd.RunE(cmd, []string{})
+		require.NoError(t, err)
+		output := buf.String()
+		assert.Contains(t, output, "No resources found")
 	})
 
 	t.Run("formats default table output", func(t *testing.T) {
@@ -565,16 +576,27 @@ func TestIntrospectRoutesCommand(t *testing.T) {
 		assert.Equal(t, "", flag.DefValue)
 	})
 
-	t.Run("returns error when registry not initialized", func(t *testing.T) {
+	t.Run("handles empty routes gracefully", func(t *testing.T) {
 		metadata.Reset()
+		emptyMeta := &metadata.Metadata{
+			Version:   "1.0.0",
+			Generated: time.Now(),
+			Resources: []metadata.ResourceMetadata{},
+			Routes:    []metadata.RouteMetadata{},
+		}
+		data, err := json.Marshal(emptyMeta)
+		require.NoError(t, err)
+		err = metadata.RegisterMetadata(data)
+		require.NoError(t, err)
 
 		cmd := newIntrospectRoutesCommand()
 		buf := &bytes.Buffer{}
 		cmd.SetOut(buf)
 
-		err := cmd.RunE(cmd, []string{})
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "registry not initialized")
+		err = cmd.RunE(cmd, []string{})
+		require.NoError(t, err)
+		output := buf.String()
+		assert.Contains(t, output, "No routes found")
 	})
 }
 
@@ -665,16 +687,27 @@ func TestIntrospectPatternsCommand(t *testing.T) {
 		assert.Equal(t, "1", flag.DefValue)
 	})
 
-	t.Run("returns error when registry not initialized", func(t *testing.T) {
+	t.Run("handles empty patterns gracefully", func(t *testing.T) {
 		metadata.Reset()
+		emptyMeta := &metadata.Metadata{
+			Version:   "1.0.0",
+			Generated: time.Now(),
+			Resources: []metadata.ResourceMetadata{},
+			Patterns:  []metadata.PatternMetadata{},
+		}
+		data, err := json.Marshal(emptyMeta)
+		require.NoError(t, err)
+		err = metadata.RegisterMetadata(data)
+		require.NoError(t, err)
 
 		cmd := newIntrospectPatternsCommand()
 		buf := &bytes.Buffer{}
 		cmd.SetOut(buf)
 
-		err := cmd.RunE(cmd, []string{})
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "registry not initialized")
+		err = cmd.RunE(cmd, []string{})
+		require.NoError(t, err)
+		output := buf.String()
+		assert.Contains(t, output, "No patterns found")
 	})
 }
 
@@ -855,9 +888,9 @@ func TestFlagParsing(t *testing.T) {
 		cmd.SetArgs([]string{"resources", "--format", "json"})
 
 		err := cmd.Execute()
-		// Expected to fail with "registry not initialized" since we reset it
+		// Expected to fail since metadata file doesn't exist
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "registry not initialized")
+		assert.Contains(t, err.Error(), "metadata file not found")
 
 		// Check the flag was set correctly
 		formatFlag := cmd.PersistentFlags().Lookup("format")
@@ -1264,7 +1297,8 @@ func TestRunIntrospectResourceCommand(t *testing.T) {
 		assert.Contains(t, err.Error(), "resource not found")
 
 		output := buf.String()
-		assert.Contains(t, output, "Error: Resource 'NonExistent' not found")
+		assert.Contains(t, output, "RESOURCE NOT FOUND")
+		assert.Contains(t, output, "NonExistent")
 		assert.Contains(t, output, "Available resources:")
 		assert.Contains(t, output, "Post")
 		assert.Contains(t, output, "User")
@@ -1327,21 +1361,13 @@ func TestLevenshteinDistance(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(fmt.Sprintf("%s->%s", tt.s1, tt.s2), func(t *testing.T) {
-			result := levenshteinDistance(tt.s1, tt.s2)
+			result := ui.LevenshteinDistance(tt.s1, tt.s2)
 			assert.Equal(t, tt.expected, result)
 		})
 	}
 }
 
 func TestFindSimilarResourceNames(t *testing.T) {
-	resources := []metadata.ResourceMetadata{
-		{Name: "Post"},
-		{Name: "User"},
-		{Name: "Comment"},
-		{Name: "Category"},
-		{Name: "Tag"},
-	}
-
 	tests := []struct {
 		name     string
 		input    string
@@ -1374,9 +1400,11 @@ func TestFindSimilarResourceNames(t *testing.T) {
 		},
 	}
 
+	candidates := []string{"Post", "User", "Comment", "Category", "Tag"}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := findSimilarResourceNames(tt.input, resources)
+			result := ui.FindSimilar(tt.input, candidates, nil)
 
 			// Check we got at least the expected suggestions (there may be more)
 			for _, expected := range tt.expected {
@@ -1422,23 +1450,35 @@ func TestHandleResourceNotFound(t *testing.T) {
 		require.Error(t, err)
 		output := buf.String()
 
-		assert.Contains(t, output, "Error: Resource 'Pst' not found")
+		// Check for new UI error format
+		assert.Contains(t, output, "RESOURCE NOT FOUND")
+		assert.Contains(t, output, "Pst")
 		assert.Contains(t, output, "Did you mean:")
 		assert.Contains(t, output, "Post")
-		assert.Contains(t, output, "Available resources:")
-		assert.Contains(t, output, "User")
-		assert.Contains(t, output, "Comment")
+		// The new format shows "See all resources" command instead of listing them
+		assert.Contains(t, output, "conduit introspect resources")
 	})
 
-	t.Run("shows error when registry not initialized", func(t *testing.T) {
+	t.Run("returns error for resource not found", func(t *testing.T) {
 		metadata.Reset()
+		testMeta := &metadata.Metadata{
+			Version:   "1.0.0",
+			Generated: time.Now(),
+			Resources: []metadata.ResourceMetadata{
+				{Name: "Post"},
+			},
+		}
+		data, err := json.Marshal(testMeta)
+		require.NoError(t, err)
+		err = metadata.RegisterMetadata(data)
+		require.NoError(t, err)
 		noColor = true
 
 		buf := &bytes.Buffer{}
-		err := handleResourceNotFound("Post", buf)
+		err = handleResourceNotFound("NonExistent", buf)
 
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "registry not initialized")
+		assert.Contains(t, err.Error(), "resource not found")
 	})
 
 	t.Cleanup(func() {
