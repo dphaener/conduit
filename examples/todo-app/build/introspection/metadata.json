@@ -1,0 +1,156 @@
+{
+  "version": "1.0.0",
+  "source_hash": "ac09ccbb3cca5c31c45fb41f29d2d0503b3a9b5c93bcfd8186aa3e86b5657b67",
+  "resources": [
+    {
+      "name": "Todo",
+      "line": 9,
+      "fields": [
+        {
+          "name": "id",
+          "type": "uuid!",
+          "nullable": false,
+          "constraints": [
+            "primary",
+            "auto"
+          ]
+        },
+        {
+          "name": "title",
+          "type": "string!",
+          "nullable": false,
+          "constraints": [
+            "min(3)",
+            "max(200)"
+          ]
+        },
+        {
+          "name": "slug",
+          "type": "string!",
+          "nullable": false,
+          "constraints": [
+            "unique"
+          ]
+        },
+        {
+          "name": "description",
+          "type": "string?",
+          "nullable": true
+        },
+        {
+          "name": "status",
+          "type": "string!",
+          "nullable": false,
+          "constraints": [
+            "default(\"pending\")"
+          ]
+        },
+        {
+          "name": "priority",
+          "type": "int!",
+          "nullable": false,
+          "constraints": [
+            "default(3)"
+          ]
+        },
+        {
+          "name": "completed",
+          "type": "bool!",
+          "nullable": false,
+          "constraints": [
+            "default(false)"
+          ]
+        },
+        {
+          "name": "due_date",
+          "type": "timestamp?",
+          "nullable": true
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp!",
+          "nullable": false,
+          "constraints": [
+            "auto"
+          ]
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp!",
+          "nullable": false,
+          "constraints": [
+            "auto_update"
+          ]
+        }
+      ],
+      "hooks": [
+        {
+          "timing": "before",
+          "event": "create",
+          "has_transaction": false,
+          "has_async": false,
+          "source_code": "self.slug = String.slugify(self.title)",
+          "line": 54
+        },
+        {
+          "timing": "before",
+          "event": "update",
+          "has_transaction": false,
+          "has_async": false,
+          "source_code": "self.slug = String.slugify(self.title)",
+          "line": 61
+        }
+      ]
+    }
+  ],
+  "patterns": [
+    {
+      "name": "unique_field",
+      "template": "field: type! @unique",
+      "description": "Fields with unique constraints",
+      "occurrences": 1
+    }
+  ],
+  "routes": [
+    {
+      "method": "POST",
+      "path": "/todos",
+      "handler": "Todo.create",
+      "resource": "Todo",
+      "operation": "create",
+      "description": "Create a new Todo"
+    },
+    {
+      "method": "PUT",
+      "path": "/todos/:id",
+      "handler": "Todo.update",
+      "resource": "Todo",
+      "operation": "update",
+      "description": "Update an existing Todo"
+    },
+    {
+      "method": "DELETE",
+      "path": "/todos/:id",
+      "handler": "Todo.delete",
+      "resource": "Todo",
+      "operation": "delete",
+      "description": "Delete a Todo"
+    },
+    {
+      "method": "GET",
+      "path": "/todos",
+      "handler": "Todo.list",
+      "resource": "Todo",
+      "operation": "list",
+      "description": "List all todos"
+    },
+    {
+      "method": "GET",
+      "path": "/todos/:id",
+      "handler": "Todo.get",
+      "resource": "Todo",
+      "operation": "get",
+      "description": "Get a single Todo by ID"
+    }
+  ]
+}

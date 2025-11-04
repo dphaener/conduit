@@ -1,0 +1,5 @@
+# Minimal Conduit Configuration
+# This is the simplest possible conduit.yaml file
+project:
+  name: minimal
+  version: 0.1.0

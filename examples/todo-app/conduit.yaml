@@ -1,0 +1,5 @@
+# Todo App Configuration
+# Demonstrates a basic CRUD application with validation
+project:
+  name: todo-app
+  version: 0.1.0
