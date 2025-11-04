@@ -105,7 +105,20 @@ func runTestPatternsCommand(cmd *cobra.Command, args []string) error {
 	}
 
 	if len(resources) == 0 {
-		return fmt.Errorf("no resources found in registry")
+		return fmt.Errorf(`no resources found in registry
+
+To create your first resource:
+
+  mkdir -p app/resources
+  cat > app/resources/todo.cdt << 'EOF'
+  resource Todo {
+    id: uuid! @primary @auto
+    title: string!
+    created_at: timestamp! @auto
+  }
+  EOF
+
+Then run: conduit build`)
 	}
 
 	if verbose {
