@@ -64,6 +64,7 @@ Features:
 	rootCmd.AddCommand(NewIntrospectCommand())
 	rootCmd.AddCommand(NewTestPatternsCommand())
 	rootCmd.AddCommand(NewCompletionCommand())
+	rootCmd.AddCommand(NewScaffoldCommand())
 
 	return rootCmd
 }
