@@ -1,0 +1,23 @@
+/// The simplest possible resource - just 3 fields!
+///
+/// This demonstrates the absolute minimum code needed for a working
+/// Conduit application. From these 3 fields, Conduit generates:
+/// - Database table with proper schema
+/// - REST API with CRUD endpoints
+/// - Input validation
+/// - JSON serialization
+resource Item {
+  // Primary key - automatically generated UUID
+  // The @primary decorator marks this as the primary key
+  // The @auto decorator tells Conduit to generate the value automatically
+  id: uuid! @primary @auto
+
+  // A simple required text field
+  // The ! means this field is required (non-nullable)
+  // Users must provide a name when creating an Item
+  name: string!
+
+  // Automatic timestamp - set when the record is created
+  // The @auto decorator automatically sets this to Time.now()
+  created_at: timestamp! @auto
+}

@@ -1,0 +1,74 @@
+name: Build Examples
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  build-examples:
+    name: Build and Verify Examples
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        example:
+          - minimal
+          - todo-app
+      fail-fast: false
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+
+      - name: Build Conduit compiler
+        run: |
+          go build -o conduit ./cmd/conduit
+          chmod +x conduit
+          echo "$PWD" >> $GITHUB_PATH
+
+      - name: Set CONDUIT_ROOT
+        run: echo "CONDUIT_ROOT=$PWD" >> $GITHUB_ENV
+
+      - name: Build example - ${{ matrix.example }}
+        working-directory: examples/${{ matrix.example }}
+        run: |
+          echo "Building example: ${{ matrix.example }}"
+          ../../conduit build --verbose
+
+      - name: Verify binary exists
+        working-directory: examples/${{ matrix.example }}
+        run: |
+          if [ ! -f build/app ]; then
+            echo "Error: Binary not found at build/app"
+            exit 1
+          fi
+          echo "✓ Binary successfully created for ${{ matrix.example }}"
+          ls -lh build/app
+
+      - name: Check generated files
+        working-directory: examples/${{ matrix.example }}
+        run: |
+          echo "Checking generated files..."
+          [ -f build/generated/main.go ] && echo "✓ main.go exists" || exit 1
+          [ -f build/generated/go.mod ] && echo "✓ go.mod exists" || exit 1
+          [ -d build/generated/models ] && echo "✓ models directory exists" || exit 1
+          [ -d build/generated/handlers ] && echo "✓ handlers directory exists" || exit 1
+          echo "✓ All required files generated for ${{ matrix.example }}"
+
+  verify-all-examples:
+    name: Verify All Examples Build
+    needs: build-examples
+    runs-on: ubuntu-latest
+    steps:
+      - name: Summary
+        run: |
+          echo "✓ All examples built successfully!"
+          echo "  - minimal"
+          echo "  - todo-app"

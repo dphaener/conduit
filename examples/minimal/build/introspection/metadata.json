@@ -1,0 +1,77 @@
+{
+  "version": "1.0.0",
+  "source_hash": "9a0f0cd187a8b566457b29997419ad50d692eace5b587f90326b7da2c3054c50",
+  "resources": [
+    {
+      "name": "Item",
+      "line": 9,
+      "fields": [
+        {
+          "name": "id",
+          "type": "uuid!",
+          "nullable": false,
+          "constraints": [
+            "primary",
+            "auto"
+          ]
+        },
+        {
+          "name": "name",
+          "type": "string!",
+          "nullable": false
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp!",
+          "nullable": false,
+          "constraints": [
+            "auto"
+          ]
+        }
+      ]
+    }
+  ],
+  "patterns": [],
+  "routes": [
+    {
+      "method": "GET",
+      "path": "/items",
+      "handler": "Item.list",
+      "resource": "Item",
+      "operation": "list",
+      "description": "List all items"
+    },
+    {
+      "method": "GET",
+      "path": "/items/:id",
+      "handler": "Item.get",
+      "resource": "Item",
+      "operation": "get",
+      "description": "Get a single Item by ID"
+    },
+    {
+      "method": "POST",
+      "path": "/items",
+      "handler": "Item.create",
+      "resource": "Item",
+      "operation": "create",
+      "description": "Create a new Item"
+    },
+    {
+      "method": "PUT",
+      "path": "/items/:id",
+      "handler": "Item.update",
+      "resource": "Item",
+      "operation": "update",
+      "description": "Update an existing Item"
+    },
+    {
+      "method": "DELETE",
+      "path": "/items/:id",
+      "handler": "Item.delete",
+      "resource": "Item",
+      "operation": "delete",
+      "description": "Delete a Item"
+    }
+  ]
+}

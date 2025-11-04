@@ -1,0 +1,64 @@
+/// Todo item with validation and lifecycle hooks
+///
+/// This resource demonstrates:
+/// - Field validation with @min/@max
+/// - Default values with @default
+/// - Optional fields with ?
+/// - Lifecycle hooks for automatic slug generation
+/// - Auto-updating timestamps
+resource Todo {
+  // Primary key - auto-generated UUID
+  id: uuid! @primary @auto
+
+  // Title with length validation
+  // Must be between 3 and 200 characters
+  // The @min and @max decorators enforce this at database and application level
+  title: string! @min(3) @max(200)
+
+  // Unique slug for URL-friendly identifiers
+  // Automatically generated from title in @before hook
+  // @unique ensures no two todos can have the same slug
+  slug: string! @unique
+
+  // Optional description - notice the ? makes it nullable
+  // Users can omit this field when creating a todo
+  description: string?
+
+  // Status field - tracks the completion state
+  // Could be: "pending", "in_progress", or "completed"
+  // Defaults to "pending" for new todos
+  status: string! @default("pending")
+
+  // Priority level (higher numbers = higher priority)
+  // Defaults to 3 (medium priority)
+  // Note: @min/@max on integers is not yet fully supported
+  priority: int! @default(3)
+
+  // Completed flag - true when todo is done
+  // Defaults to false for new todos
+  completed: bool! @default(false)
+
+  // Optional due date - nullable timestamp
+  // Can be null if todo has no deadline
+  due_date: timestamp?
+
+  // Automatic timestamps
+  // created_at: Set once when record is created
+  // updated_at: Automatically updated every time the record changes
+  created_at: timestamp! @auto
+  updated_at: timestamp! @auto_update
+
+  // Lifecycle hook - runs before creating a new todo
+  // Automatically generates a URL-friendly slug from the title
+  // Example: "Write Documentation" becomes "write-documentation"
+  @before create {
+    self.slug = String.slugify(self.title)
+  }
+
+  // Lifecycle hook - runs before updating a todo
+  // Updates the slug if the title changed
+  // Ensures slug stays in sync with title
+  @before update {
+    self.slug = String.slugify(self.title)
+  }
+}
