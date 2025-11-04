@@ -280,7 +280,20 @@ func QueryResource(name string) (*ResourceMetadata, error) {
 			// TODO: Load embedded metadata here (waiting for CON-51)
 			// For now, return error if not manually registered
 			globalRegistry.initMutex.Unlock()
-			return nil, fmt.Errorf("registry not initialized")
+			return nil, fmt.Errorf(`registry not initialized - no resources found yet
+
+To create your first resource:
+
+  mkdir -p app/resources
+  cat > app/resources/todo.cdt << 'EOF'
+  resource Todo {
+    id: uuid! @primary @auto
+    title: string!
+    created_at: timestamp! @auto
+  }
+  EOF
+
+Then run: conduit build`)
 		}
 		globalRegistry.initMutex.Unlock()
 	}
@@ -421,7 +434,20 @@ func QueryPattern(name string) (*PatternMetadata, error) {
 			// TODO: Load embedded metadata here (waiting for CON-51)
 			// For now, return error if not manually registered
 			globalRegistry.initMutex.Unlock()
-			return nil, fmt.Errorf("registry not initialized")
+			return nil, fmt.Errorf(`registry not initialized - no resources found yet
+
+To create your first resource:
+
+  mkdir -p app/resources
+  cat > app/resources/todo.cdt << 'EOF'
+  resource Todo {
+    id: uuid! @primary @auto
+    title: string!
+    created_at: timestamp! @auto
+  }
+  EOF
+
+Then run: conduit build`)
 		}
 		globalRegistry.initMutex.Unlock()
 	}

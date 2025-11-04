@@ -109,7 +109,20 @@ func runBuild(cmd *cobra.Command, args []string) error {
 	}
 
 	if len(cdtFiles) == 0 {
-		return fmt.Errorf("no .cdt files found in app/ directory")
+		return fmt.Errorf(`no .cdt files found in app/ directory
+
+To create your first resource:
+
+  mkdir -p app/resources
+  cat > app/resources/todo.cdt << 'EOF'
+  resource Todo {
+    id: uuid! @primary @auto
+    title: string!
+    created_at: timestamp! @auto
+  }
+  EOF
+
+Then run: conduit build`)
 	}
 
 	if buildVerbose {
