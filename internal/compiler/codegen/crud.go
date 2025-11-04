@@ -157,6 +157,138 @@ func (g *Generator) generateUpdate(resource *ast.ResourceNode) {
 	g.writeLine("}")
 }
 
+// generatePatch generates the Patch() method for partial updates
+func (g *Generator) generatePatch(resource *ast.ResourceNode) {
+	receiverName := strings.ToLower(resource.Name[0:1])
+
+	g.writeLine("// Patch partially updates an existing %s in the database", resource.Name)
+	g.writeLine("func (%s *%s) Patch(ctx context.Context, db *sql.DB, partialJSON []byte) error {",
+		receiverName, resource.Name)
+	g.indent++
+
+	// Parse partial JSON into a map to identify which fields were provided
+	g.writeLine("// Parse partial JSON to identify provided fields")
+	g.writeLine("var partialData map[string]interface{}")
+	g.writeLine("if err := json.Unmarshal(partialJSON, &partialData); err != nil {")
+	g.indent++
+	g.writeLine(`return fmt.Errorf("invalid JSON: %%w", err)`)
+	g.indent--
+	g.writeLine("}")
+	g.writeLine("")
+
+	// Check for empty PATCH
+	g.writeLine("// Reject empty PATCH requests")
+	g.writeLine("if len(partialData) == 0 {")
+	g.indent++
+	g.writeLine(`return fmt.Errorf("empty PATCH request: no fields provided")`)
+	g.indent--
+	g.writeLine("}")
+	g.writeLine("")
+
+	// Validate no read-only fields
+	g.writeLine("// Validate no read-only fields are being updated")
+	g.writeLine("readOnlyFields := map[string]bool{")
+	g.indent++
+	g.writeLine(`"id": true,`)
+	g.writeLine(`"created_at": true,`)
+	g.writeLine(`"updated_at": true,`)
+	g.indent--
+	g.writeLine("}")
+	g.writeLine("for field := range partialData {")
+	g.indent++
+	g.writeLine("if readOnlyFields[field] {")
+	g.indent++
+	g.writeLine(`return fmt.Errorf("field '%%s' is read-only and cannot be updated", field)`)
+	g.indent--
+	g.writeLine("}")
+	g.indent--
+	g.writeLine("}")
+	g.writeLine("")
+
+	// Build list of valid fields
+	g.writeLine("// Build list of valid fields")
+	g.writeLine("validFields := map[string]bool{")
+	g.indent++
+	for _, field := range resource.Fields {
+		if field.Name != "id" && !hasConstraint(field, "auto") && !hasConstraint(field, "auto_update") {
+			columnName := g.toDBColumnName(field.Name)
+			g.writeLine("\"%s\": true,", columnName)
+		}
+	}
+	g.indent--
+	g.writeLine("}")
+	g.writeLine("")
+
+	// Validate unknown fields
+	g.writeLine("// Validate no unknown fields")
+	g.writeLine("for field := range partialData {")
+	g.indent++
+	g.writeLine("if !validFields[field] && !readOnlyFields[field] {")
+	g.indent++
+	g.writeLine("// Build list of valid field names for error message")
+	g.writeLine("validFieldNames := make([]string, 0, len(validFields))")
+	g.writeLine("for f := range validFields {")
+	g.indent++
+	g.writeLine("validFieldNames = append(validFieldNames, f)")
+	g.indent--
+	g.writeLine("}")
+	g.writeLine(`return fmt.Errorf("unknown field '%%s': valid fields are: %%v", field, validFieldNames)`)
+	g.indent--
+	g.writeLine("}")
+	g.indent--
+	g.writeLine("}")
+	g.writeLine("")
+
+	// Apply partial updates to existing resource
+	g.writeLine("// Apply partial updates to existing resource.")
+	g.writeLine("// Note: Nullable fields (pointer types) can be set to null explicitly.")
+	g.writeLine("// Non-nullable fields retain their existing values if not provided.")
+	g.writeLine("// Nested objects/arrays must be provided in full if updating.")
+	g.writeLine("if err := json.Unmarshal(partialJSON, &%s); err != nil {", receiverName)
+	g.indent++
+	g.writeLine(`return fmt.Errorf("failed to apply partial update: %%w", err)`)
+	g.indent--
+	g.writeLine("}")
+	g.writeLine("")
+
+	// Validate merged result
+	g.writeLine("// Validate the merged result")
+	g.writeLine("if err := %s.Validate(); err != nil {", receiverName)
+	g.indent++
+	g.writeLine(`return fmt.Errorf("validation failed: %%w", err)`)
+	g.indent--
+	g.writeLine("}")
+	g.writeLine("")
+
+	// Handle @auto_update fields
+	g.generateAutoFields(resource, "update")
+	if hasAutoUpdateFields(resource) {
+		g.writeLine("")
+	}
+
+	// Build UPDATE query for all fields (same as Update)
+	setClauses, values := g.buildUpdateQuery(resource)
+
+	g.writeLine("query := `UPDATE %s SET %s WHERE id = $%d`",
+		g.toTableName(resource.Name), strings.Join(setClauses, ", "), len(setClauses)+1)
+	g.writeLine("")
+
+	// Add ID to values
+	values = append(values, fmt.Sprintf("%s.ID", receiverName))
+
+	g.writeLine("_, err := db.ExecContext(ctx, query, %s)", strings.Join(values, ", "))
+	g.writeLine("if err != nil {")
+	g.indent++
+	g.writeLine("return fmt.Errorf(\"failed to patch %s: %%w\", err)", strings.ToLower(resource.Name))
+	g.indent--
+	g.writeLine("}")
+	g.writeLine("")
+
+	g.writeLine("return nil")
+	g.indent--
+	g.writeLine("}")
+}
+
 // generateDelete generates the Delete() method for a resource
 func (g *Generator) generateDelete(resource *ast.ResourceNode) {
 	receiverName := strings.ToLower(resource.Name[0:1])

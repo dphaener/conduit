@@ -247,6 +247,9 @@ func (g *Generator) GenerateResource(resource *ast.ResourceNode) (string, error)
 	g.generateUpdate(resource)
 	g.writeLine("")
 
+	g.generatePatch(resource)
+	g.writeLine("")
+
 	g.generateDelete(resource)
 	g.writeLine("")
 
@@ -303,6 +306,7 @@ func (g *Generator) collectImports(resource *ast.ResourceNode) {
 	// CRUD operations always need context and database/sql
 	g.imports["context"] = true
 	g.imports["database/sql"] = true
+	g.imports["encoding/json"] = true
 
 	if needsTime {
 		g.imports["time"] = true
