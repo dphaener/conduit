@@ -134,6 +134,10 @@ func (g *Generator) generateResourceHandlers(resource *ast.ResourceNode) error {
 	g.generateUpdateHandler(resource)
 	g.writeLine("")
 
+	// Patch handler
+	g.generatePatchHandler(resource)
+	g.writeLine("")
+
 	// Delete handler
 	g.generateDeleteHandler(resource)
 	g.writeLine("")
@@ -147,6 +151,7 @@ func (g *Generator) generateResourceHandlers(resource *ast.ResourceNode) error {
 	g.writeLine("r.Post(\"/%s\", Create%sHandler(db))", tableName, resource.Name)
 	g.writeLine("r.Get(\"/%s/{id}\", Get%sHandler(db))", tableName, resource.Name)
 	g.writeLine("r.Put(\"/%s/{id}\", Update%sHandler(db))", tableName, resource.Name)
+	g.writeLine("r.Patch(\"/%s/{id}\", Patch%sHandler(db))", tableName, resource.Name)
 	g.writeLine("r.Delete(\"/%s/{id}\", Delete%sHandler(db))", tableName, resource.Name)
 	g.indent--
 	g.writeLine("}")
@@ -781,6 +786,149 @@ func (g *Generator) generateUpdateHandler(resource *ast.ResourceNode) {
 
 	g.writeLine("w.Header().Set(\"Content-Type\", \"application/json\")")
 	g.writeLine("if err := json.NewEncoder(w).Encode(%s); err != nil {", receiverName)
+	g.indent++
+	g.writeLine("respondWithError(w, fmt.Sprintf(\"Failed to encode response: %%v\", err), http.StatusInternalServerError)")
+	g.writeLine("return")
+	g.indent--
+	g.writeLine("}")
+
+	g.indent--
+	g.writeLine("}")
+
+	g.indent--
+	g.writeLine("}")
+	g.indent--
+	g.writeLine("}")
+}
+
+// generatePatchHandler generates the PATCH handler (PATCH /resources/:id) for partial updates
+func (g *Generator) generatePatchHandler(resource *ast.ResourceNode) {
+	resourceLower := strings.ToLower(resource.Name)
+	tableName := g.toTableName(resource.Name)
+
+	g.writeLine("// Patch%sHandler handles PATCH /%s/{id} - partially update an existing %s",
+		resource.Name, tableName, resourceLower)
+	g.writeLine("func Patch%sHandler(db *sql.DB) http.HandlerFunc {", resource.Name)
+	g.indent++
+	g.writeLine("return func(w http.ResponseWriter, r *http.Request) {")
+	g.indent++
+
+	g.writeLine("ctx := r.Context()")
+	g.writeLine("")
+
+	// Parse ID from URL
+	g.generateIDParsingCode(resource)
+
+	// Fetch existing resource
+	g.writeLine("// Fetch existing %s", resourceLower)
+	g.writeLine("existing, err := models.Find%sByID(ctx, db, id)", resource.Name)
+	g.writeLine("if err != nil {")
+	g.indent++
+	g.writeLine("if err == sql.ErrNoRows {")
+	g.indent++
+	g.writeLine("if response.IsJSONAPI(r) {")
+	g.indent++
+	g.writeLine("response.RenderJSONAPIError(w, http.StatusNotFound, fmt.Errorf(\"Not found\"))")
+	g.indent--
+	g.writeLine("} else {")
+	g.indent++
+	g.writeLine("respondWithError(w, \"Not found\", http.StatusNotFound)")
+	g.indent--
+	g.writeLine("}")
+	g.writeLine("return")
+	g.indent--
+	g.writeLine("}")
+	g.writeLine("if response.IsJSONAPI(r) {")
+	g.indent++
+	g.writeLine("response.RenderJSONAPIError(w, http.StatusInternalServerError, fmt.Errorf(\"Failed to find %s: %%v\", err))", resourceLower)
+	g.indent--
+	g.writeLine("} else {")
+	g.indent++
+	g.writeLine("respondWithError(w, fmt.Sprintf(\"Failed to find %s: %%v\", err), http.StatusInternalServerError)", resourceLower)
+	g.indent--
+	g.writeLine("}")
+	g.writeLine("return")
+	g.indent--
+	g.writeLine("}")
+	g.writeLine("")
+
+	// Branch on content negotiation
+	g.writeLine("// Check if JSON:API format is requested")
+	g.writeLine("if response.IsJSONAPI(r) {")
+	g.indent++
+
+	// JSON:API path
+	g.writeLine("// Validate Content-Type")
+	g.writeLine("if !response.ValidateJSONAPIContentType(w, r) {")
+	g.indent++
+	g.writeLine("return")
+	g.indent--
+	g.writeLine("}")
+	g.writeLine("")
+
+	g.writeLine("// Limit request body size to prevent DoS attacks (10MB default)")
+	g.writeLine("r.Body = http.MaxBytesReader(w, r.Body, 10<<20)")
+	g.writeLine("")
+	g.writeLine("// Read request body")
+	g.writeLine("body, err := io.ReadAll(r.Body)")
+	g.writeLine("if err != nil {")
+	g.indent++
+	g.writeLine("var maxBytesError *http.MaxBytesError")
+	g.writeLine("if errors.As(err, &maxBytesError) {")
+	g.indent++
+	g.writeLine("response.RenderJSONAPIError(w, http.StatusRequestEntityTooLarge, fmt.Errorf(\"Request body too large (max 10MB)\"))")
+	g.writeLine("return")
+	g.indent--
+	g.writeLine("}")
+	g.writeLine("response.RenderJSONAPIError(w, http.StatusBadRequest, fmt.Errorf(\"Failed to read request body: %%v\", err))")
+	g.writeLine("return")
+	g.indent--
+	g.writeLine("}")
+	g.writeLine("")
+
+	g.writeLine("// Patch %s (includes validation and hooks)", resourceLower)
+	g.writeLine("if err := existing.Patch(ctx, db, body); err != nil {")
+	g.indent++
+	g.writeLine("response.RenderJSONAPIError(w, http.StatusUnprocessableEntity, err)")
+	g.writeLine("return")
+	g.indent--
+	g.writeLine("}")
+	g.writeLine("")
+
+	g.writeLine("// Render JSON:API response")
+	g.writeLine("if err := response.RenderJSONAPI(w, http.StatusOK, existing); err != nil {")
+	g.indent++
+	g.writeLine("response.RenderJSONAPIError(w, http.StatusInternalServerError, fmt.Errorf(\"Failed to encode response: %%v\", err))")
+	g.writeLine("return")
+	g.indent--
+	g.writeLine("}")
+
+	g.indent--
+	g.writeLine("} else {")
+	g.indent++
+
+	// Legacy JSON path
+	g.writeLine("// Legacy JSON format")
+	g.writeLine("body, err := io.ReadAll(r.Body)")
+	g.writeLine("if err != nil {")
+	g.indent++
+	g.writeLine("respondWithError(w, fmt.Sprintf(\"Failed to read request body: %%v\", err), http.StatusBadRequest)")
+	g.writeLine("return")
+	g.indent--
+	g.writeLine("}")
+	g.writeLine("")
+
+	g.writeLine("// Patch %s (includes validation and hooks)", resourceLower)
+	g.writeLine("if err := existing.Patch(ctx, db, body); err != nil {")
+	g.indent++
+	g.writeLine("respondWithError(w, fmt.Sprintf(\"Failed to patch %s: %%v\", err), http.StatusUnprocessableEntity)", resourceLower)
+	g.writeLine("return")
+	g.indent--
+	g.writeLine("}")
+	g.writeLine("")
+
+	g.writeLine("w.Header().Set(\"Content-Type\", \"application/json\")")
+	g.writeLine("if err := json.NewEncoder(w).Encode(existing); err != nil {")
 	g.indent++
 	g.writeLine("respondWithError(w, fmt.Sprintf(\"Failed to encode response: %%v\", err), http.StatusInternalServerError)")
 	g.writeLine("return")
