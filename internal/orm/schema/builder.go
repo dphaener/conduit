@@ -122,6 +122,30 @@ func (b *Builder) buildField(node *ast.FieldNode) (*Field, error) {
 			return nil, fmt.Errorf("field %s constraint: %w", node.Name, err)
 		}
 		field.Constraints = append(field.Constraints, constraint)
+
+		// Also add as annotation for DDL generation
+		annotation := Annotation{
+			Name: constraintNode.Name,
+			Args: make([]interface{}, 0),
+		}
+		for _, arg := range constraintNode.Arguments {
+			if val, err := b.extractValue(arg); err == nil {
+				annotation.Args = append(annotation.Args, val)
+			}
+		}
+		field.Annotations = append(field.Annotations, annotation)
+
+		// For @max constraint, also update the TypeSpec.Length
+		if constraintNode.Name == "max" && len(constraintNode.Arguments) > 0 {
+			if maxVal, err := b.extractValue(constraintNode.Arguments[0]); err == nil {
+				if maxInt, ok := maxVal.(int); ok {
+					field.Type.Length = &maxInt
+				} else if maxInt64, ok := maxVal.(int64); ok {
+					maxInt := int(maxInt64)
+					field.Type.Length = &maxInt
+				}
+			}
+		}
 	}
 
 	return field, nil

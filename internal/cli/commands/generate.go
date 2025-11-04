@@ -152,7 +152,9 @@ that will be implemented in the tooling milestone.`,
 }
 
 func newGenerateMigrationCommand() *cobra.Command {
-	return &cobra.Command{
+	var fromResource string
+
+	cmd := &cobra.Command{
 		Use:   "migration [name]",
 		Short: "Generate a database migration",
 		Long: `Generate up and down migration SQL files in the migrations/ directory.
@@ -163,7 +165,8 @@ Migration files are named with a timestamp prefix:
 
 Examples:
   conduit generate migration create_users
-  conduit generate migration add_email_to_users`,
+  conduit generate migration add_email_to_users
+  conduit generate migration create_users --from-resource User`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			successColor := color.New(color.FgGreen, color.Bold)
 			infoColor := color.New(color.FgCyan)
@@ -195,25 +198,50 @@ Examples:
 			upFile := filepath.Join("migrations", fmt.Sprintf("%d_%s.up.sql", version, sanitizedName))
 			downFile := filepath.Join("migrations", fmt.Sprintf("%d_%s.down.sql", version, sanitizedName))
 
-			// Create up migration file
-			upContent := fmt.Sprintf(`-- Migration: %s
+			var upContent, downContent string
+
+			// Check if --from-resource flag is set
+			if fromResource != "" {
+				// Generate SQL from resource definition
+				sqlGenerator := NewMigrationSQLGenerator()
+				up, down, err := sqlGenerator.GenerateFromResource(fromResource)
+				if err != nil {
+					return fmt.Errorf("failed to generate SQL from resource: %w", err)
+				}
+
+				upContent = fmt.Sprintf(`-- Migration: %s
+-- Created: %s
+-- Auto-generated from resource: %s
+--
+%s
+`, migrationName, time.Now().Format("2006-01-02 15:04:05"), fromResource, up)
+
+				downContent = fmt.Sprintf(`-- Rollback migration: %s
+-- Created: %s
+-- Auto-generated from resource: %s
+--
+%s
+`, migrationName, time.Now().Format("2006-01-02 15:04:05"), fromResource, down)
+			} else {
+				// Create empty migration templates
+				upContent = fmt.Sprintf(`-- Migration: %s
 -- Created: %s
 --
 -- Add your SQL here to create/modify database schema
 
 `, migrationName, time.Now().Format("2006-01-02 15:04:05"))
 
-			if err := os.WriteFile(upFile, []byte(upContent), 0644); err != nil {
-				return fmt.Errorf("failed to write up migration: %w", err)
-			}
-
-			// Create down migration file
-			downContent := fmt.Sprintf(`-- Rollback migration: %s
+				downContent = fmt.Sprintf(`-- Rollback migration: %s
 -- Created: %s
 --
 -- Add your SQL here to rollback the changes from the up migration
 
 `, migrationName, time.Now().Format("2006-01-02 15:04:05"))
+			}
+
+			if err := os.WriteFile(upFile, []byte(upContent), 0644); err != nil {
+				return fmt.Errorf("failed to write up migration: %w", err)
+			}
 
 			if err := os.WriteFile(downFile, []byte(downContent), 0644); err != nil {
 				return fmt.Errorf("failed to write down migration: %w", err)
@@ -223,12 +251,25 @@ Examples:
 			infoColor.Printf("  %s\n", upFile)
 			infoColor.Printf("  %s\n", downFile)
 			fmt.Println()
+			if fromResource != "" {
+				infoColor.Printf("Generated from resource: %s\n", fromResource)
+				fmt.Println()
+			}
 			infoColor.Println("Next steps:")
-			fmt.Println("  1. Edit the migration files to add your SQL")
-			fmt.Println("  2. Run 'conduit migrate up' to apply")
+			if fromResource == "" {
+				fmt.Println("  1. Edit the migration files to add your SQL")
+				fmt.Println("  2. Run 'conduit migrate up' to apply")
+			} else {
+				fmt.Println("  1. Review the generated SQL")
+				fmt.Println("  2. Run 'conduit migrate up' to apply")
+			}
 			fmt.Println()
 
 			return nil
 		},
 	}
+
+	cmd.Flags().StringVar(&fromResource, "from-resource", "", "Generate migration SQL from a resource definition")
+
+	return cmd
 }
