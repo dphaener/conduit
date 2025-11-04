@@ -28,78 +28,69 @@ This file provides guidance to Claude Code (claude.ai/code) when working with th
 
 Conduit is an LLM-first language that compiles to Go. The killer feature: **runtime introspection** - query the running application to discover schema, patterns, and available operations.
 
-## Starting from Scratch (Bootstrap Guide)
+## Quick Reference Card
 
-New to this project? Follow these steps to go from zero to first working endpoint:
-
-### Step 1: Understand What Exists
-
-` + "```bash" + `
-# See what resources are already defined
-ls -la app/resources/
-
-# Check current configuration
-cat conduit.yaml
+**Minimal Resource Template:**
+` + "```conduit" + `
+resource Name {
+  id: uuid! @primary @auto
+  name: string! @min(2) @max(100)
+  created_at: timestamp! @auto
+  updated_at: timestamp! @auto_update
+}
 ` + "```" + `
 
-### Step 2: Create Your First Resource (if none exist)
+**Common Types:** ` + "`string! text! int! bool! uuid! timestamp!`" + `
 
-Create ` + "`app/resources/example.cdt`" + `:
+**Common Directives:** ` + "`@primary @auto @auto_update @unique @min(n) @max(n) @default(val)`" + `
 
-` + "```conduit" + `
-/// Example resource
-resource Example {
+**Common Functions:** ` + "`String.slugify() String.length() String.contains() Time.now() UUID.generate() Array.length()`" + `
+
+**CRITICAL: All functions MUST be namespaced** (` + "`String.slugify()`" + ` not ` + "`slugify()`" + `)
+
+See LANGUAGE-SPEC.md for complete reference
+
+## Bootstrap (First Resource)
+
+**Creating your first working resource (empty project):**
+
+### Step 1: Create Resource File
+` + "```bash" + `
+mkdir -p app/resources && cat > app/resources/item.cdt << 'EOF'
+resource Item {
   id: uuid! @primary @auto
   name: string! @min(2) @max(100)
   created_at: timestamp! @auto
 }
+EOF
 ` + "```" + `
 
-### Step 3: Build and Discover What Was Generated
-
+### Step 2: Build
 ` + "```bash" + `
-# Compile .cdt files to Go
-conduit build
-
-# DISCOVERY: See what was generated
-ls -la build/generated/
-
-# DISCOVERY: Check the metadata file
-cat build/app.meta.json | head -n 50
+conduit build  # Generates build/app.meta.json
 ` + "```" + `
 
-### Step 4: Introspect the Schema
-
+### Step 3: Migrate
 ` + "```bash" + `
-# View all resources
-conduit introspect schema
-
-# View specific resource details
-conduit introspect schema Example
+conduit migrate generate && conduit migrate up
 ` + "```" + `
 
-### Step 5: Generate and Run Migration
-
+### Step 4: Run
 ` + "```bash" + `
-# Generate migration from schema
-conduit migrate generate
-
-# Check what was generated
-cat migrations/*.sql
-
-# Apply migration
-conduit migrate up
+conduit run --watch  # Server starts on port {{.Variables.port}}
 ` + "```" + `
 
-### Step 6: Start the Server and Test
-
+### Step 5: Test
 ` + "```bash" + `
-# Run with auto-reload
-conduit run --watch
-
-# In another terminal, test the API
-curl http://localhost:{{.Variables.port}}/api/examples
+curl http://localhost:{{.Variables.port}}/api/items
 ` + "```" + `
+
+### Step 6: Discover
+` + "```bash" + `
+conduit introspect schema  # See what was generated
+` + "```" + `
+
+**After first build succeeds, use Discovery Mechanisms below.**
 
 ## Discovery Mechanisms (YOUR PRIMARY TOOLS)
 

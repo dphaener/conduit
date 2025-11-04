@@ -26,6 +26,70 @@ This guide will walk you through installing Conduit, creating your first applica
 
 ---
 
+## Quick Reference Card (Copy-Paste Ready)
+
+**When you need to create a resource from scratch, use this template:**
+
+```conduit
+/// Description of your resource
+resource YourResourceName {
+  // Required: Primary key
+  id: uuid! @primary @auto
+
+  // Required: Add your fields here
+  name: string! @min(2) @max(100)
+
+  // Optional: Add more fields as needed
+  description: text?
+  count: int! @min(0) @default(0)
+  is_active: bool! @default(true)
+  email: string! @unique
+
+  // Required: Timestamps
+  created_at: timestamp! @auto
+  updated_at: timestamp! @auto_update
+}
+```
+
+**Common Field Types (Most Used):**
+```conduit
+string!         // Short text (use @min/@max for length)
+text!           // Long text (blog posts, descriptions)
+int!            // Whole numbers (use @min/@max for range)
+bool!           // true/false
+uuid!           // Universally unique identifier
+timestamp!      // Date and time
+```
+
+**Common Directives (Most Used):**
+```conduit
+@primary        // Mark as primary key (required on one field)
+@auto           // Auto-generate value (for id, created_at)
+@auto_update    // Auto-update on changes (for updated_at)
+@unique         // Ensure field value is unique
+@min(n)         // Minimum value (numbers) or length (strings)
+@max(n)         // Maximum value (numbers) or length (strings)
+@default(val)   // Default value if not provided
+```
+
+**Common Stdlib Functions (Most Used):**
+```conduit
+String.slugify(text)      // Convert to URL-friendly slug
+String.length(text)       // Get length of string
+String.upcase(text)       // Convert to uppercase
+String.downcase(text)     // Convert to lowercase
+Time.now()                // Current timestamp
+UUID.generate()           // Generate new UUID
+```
+
+**CRITICAL: Functions are ALWAYS namespaced** (prevents LLM hallucination)
+- ✓ Correct: `String.slugify(self.title)`
+- ✗ Wrong: `slugify(self.title)` (won't compile)
+
+**For complete reference:** See [LANGUAGE-SPEC.md](LANGUAGE-SPEC.md)
+
+---
+
 ## Prerequisites
 
 Before installing Conduit, ensure you have:
@@ -170,6 +234,73 @@ conduit doctor
 # ✓ Configuration valid
 # ✓ Ready to build!
 ```
+
+---
+
+## Bootstrap (First Resource)
+
+**If you're starting with an empty project and need to create your first working resource, start here:**
+
+### Step 1: Create the Resource File
+
+Create `src/resources/item.cdt`:
+
+```conduit
+/// Your first resource - a simple item tracker
+resource Item {
+  id: uuid! @primary @auto          // Required
+  name: string! @min(2) @max(100)   // Required
+  created_at: timestamp! @auto      // Required
+}
+```
+
+**Or use this shell command:**
+```bash
+mkdir -p src/resources
+cat > src/resources/item.cdt << 'EOF'
+/// Your first resource - a simple item tracker
+resource Item {
+  id: uuid! @primary @auto
+  name: string! @min(2) @max(100)
+  created_at: timestamp! @auto
+}
+EOF
+```
+
+### Step 2: Build and Verify
+
+```bash
+# Compile the resource
+conduit build
+
+# Verify it compiled successfully (should see build/ directory)
+ls -la build/
+```
+
+### Step 3: Generate and Apply Migration
+
+```bash
+# Generate SQL migration from your resource
+conduit migrate generate
+
+# Check the generated SQL (optional)
+cat migrations/*.sql
+
+# Apply migration to create database table
+conduit migrate up
+```
+
+### Step 4: Start Server and Test
+
+```bash
+# Start the development server
+conduit run --watch
+
+# In another terminal, test the API
+curl http://localhost:3000/api/items
+```
+
+**After your first build succeeds, you can explore more complex features below.**
 
 ---
 

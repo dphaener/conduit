@@ -22,7 +22,7 @@ func TestGetCLAUDEMDContent(t *testing.T) {
 	// Verify key sections exist
 	requiredSections := []string{
 		"## Quick Context",
-		"## Starting from Scratch",
+		"## Bootstrap (First Resource)",
 		"## Discovery Mechanisms",
 		"## How to Learn Conduit",
 		"## Project Structure",
