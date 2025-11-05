@@ -49,6 +49,7 @@ func TestIntrospectCommand(t *testing.T) {
 			"routes",
 			"deps",
 			"patterns",
+			"stdlib",
 		}
 
 		for _, name := range expectedCommands {
