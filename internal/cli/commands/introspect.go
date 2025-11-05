@@ -125,7 +125,12 @@ accurate, up-to-date information about your application's structure.`,
 				color.NoColor = true
 			}
 
-			// Load metadata from file
+			// Skip metadata loading for stdlib command (doesn't need it)
+			if cmd.Name() == "stdlib" {
+				return nil
+			}
+
+			// Load metadata from file for other commands
 			if err := loadMetadataFromFile(); err != nil {
 				return err
 			}
@@ -146,6 +151,7 @@ accurate, up-to-date information about your application's structure.`,
 	cmd.AddCommand(newIntrospectRoutesCommand())
 	cmd.AddCommand(newIntrospectDepsCommand())
 	cmd.AddCommand(newIntrospectPatternsCommand())
+	cmd.AddCommand(newIntrospectStdlibCommand())
 
 	return cmd
 }
