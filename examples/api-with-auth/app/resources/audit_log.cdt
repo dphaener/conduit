@@ -1,0 +1,54 @@
+/// Audit log for tracking security events
+///
+/// This resource demonstrates:
+/// - Immutable audit logging (no updates allowed)
+/// - Optional relationships (account can be null for anonymous events)
+/// - Event categorization
+/// - IP address and metadata tracking
+resource AuditLog {
+  // Primary key
+  id: uuid! @primary @auto
+
+  // Optional account reference
+  // Can be null for events before authentication
+  account_id: uuid?
+
+  // Event type categorization
+  // Examples: "login", "logout", "password_change", "api_key_created"
+  event_type: string! @min(3) @max(50)
+
+  // Event description
+  description: string! @min(1) @max(500)
+
+  // IP address of the request
+  // Optional because some events may not have an IP
+  ip_address: string?
+
+  // User agent string
+  // Helps identify the client making the request
+  user_agent: text?
+
+  // Success or failure
+  success: bool! @default(true)
+
+  // Optional error message if success is false
+  error_message: text?
+
+  // Event timestamp
+  // Note: Only created_at, no updated_at
+  // Audit logs are immutable - never updated
+  created_at: timestamp! @auto
+
+  // Optional relationship to account
+  // Note: The ? makes the relationship nullable
+  // This allows logging events for non-authenticated users
+  account: Account? {
+    foreign_key: "account_id"
+    on_delete: set_null
+  }
+
+  // Normalize event type to lowercase for consistency
+  @before create {
+    self.event_type = String.downcase(self.event_type)
+  }
+}

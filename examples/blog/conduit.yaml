@@ -1,0 +1,5 @@
+# Blog Example Conduit Configuration
+# Demonstrates relationships between User, Post, and Comment resources
+project:
+  name: blog
+  version: 0.1.0

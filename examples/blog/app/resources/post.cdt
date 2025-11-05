@@ -1,0 +1,57 @@
+/// Blog post resource
+///
+/// This resource demonstrates:
+/// - belongs_to relationship (Post belongs to User via author_id)
+/// - Slug generation from title using String.slugify
+/// - Boolean fields with defaults (@default)
+/// - Text field for long content
+/// - Foreign key with on_delete behavior
+resource Post {
+  // Primary key - auto-generated UUID
+  id: uuid! @primary @auto
+
+  // Post title with length constraints
+  // Must be between 5 and 200 characters
+  title: string! @min(5) @max(200)
+
+  // URL-friendly slug (auto-generated from title)
+  // @unique ensures no two posts have the same slug
+  slug: string! @unique
+
+  // Post content (long text)
+  // text type allows for much longer content than string
+  content: text! @min(100)
+
+  // Published state (defaults to draft)
+  // New posts are unpublished by default
+  published: bool! @default(false)
+
+  // Foreign key to User (author)
+  // This stores the UUID of the user who created the post
+  author_id: uuid!
+
+  // Timestamps
+  created_at: timestamp! @auto
+  updated_at: timestamp! @auto_update
+
+  // Relationship: Post belongs to User
+  // This creates an association between Post and User
+  // foreign_key: specifies the field holding the user ID
+  // on_delete: restrict prevents deleting users who have posts
+  author: User! {
+    foreign_key: "author_id"
+    on_delete: restrict
+  }
+
+  // Generate URL-friendly slug from title before creating
+  // Example: "My First Post" becomes "my-first-post"
+  @before create {
+    self.slug = String.slugify(self.title)
+  }
+
+  // Update slug if title changes
+  // Keeps slug in sync with title
+  @before update {
+    self.slug = String.slugify(self.title)
+  }
+}

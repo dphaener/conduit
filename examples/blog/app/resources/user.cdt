@@ -1,0 +1,43 @@
+/// User resource representing blog authors
+///
+/// This resource demonstrates:
+/// - Email validation and uniqueness with @unique
+/// - Password hash storage (production apps should use bcrypt)
+/// - Optional fields with ? (bio can be null)
+/// - Lifecycle hooks for email normalization
+/// - belongs_to relationships (see Post and Comment resources)
+resource User {
+  // Primary key - auto-generated UUID
+  id: uuid! @primary @auto
+
+  // Email must be unique across all users
+  // @unique creates a database index and enforces uniqueness
+  // @min/@max provide length validation
+  email: string! @unique @min(5) @max(255)
+
+  // Store password hash, never plain text
+  // In production, hash with bcrypt before storing
+  // Length 60 is standard for bcrypt hashes
+  password_hash: string! @min(60) @max(255)
+
+  // User's display name
+  name: string! @min(2) @max(100)
+
+  // Optional bio/profile text
+  // The ? makes this nullable - users can omit this
+  bio: text?
+
+  // Automatic timestamps
+  created_at: timestamp! @auto
+  updated_at: timestamp! @auto_update
+
+  // Normalize email to lowercase before saving
+  // This ensures email uniqueness is case-insensitive
+  @before create {
+    self.email = String.downcase(self.email)
+  }
+
+  @before update {
+    self.email = String.downcase(self.email)
+  }
+}
