@@ -27,6 +27,20 @@ When learning Conduit or assisting users with Conduit development, follow this p
    - Time to understand: 5 minutes
    - Builds successfully with `conduit build`
 
+3. **Blog Example** (`examples/blog/`)
+   - Multi-resource blog application with relationships
+   - Demonstrates: belongs_to relationships, multiple foreign keys, on_delete behaviors
+   - Resources: User (authors), Post (blog posts), Comment (post comments)
+   - Time to understand: 15 minutes
+   - Shows real-world relationship patterns
+
+4. **API with Auth Example** (`examples/api-with-auth/`)
+   - Authentication and authorization patterns
+   - Demonstrates: account management, API keys, audit logging, optional relationships
+   - Resources: Account, ApiKey, AuditLog
+   - Time to understand: 20 minutes
+   - Shows security and auth best practices
+
 **Key takeaway**: From minimal resource definitions, Conduit generates complete REST APIs with database schemas, validation, and type safety.
 
 ### Level 2: Core Documentation
@@ -288,7 +302,7 @@ This generates database CHECK constraints and application-level validation.
 For numeric range validation (@min/@max on integers), there's currently
 a codegen bug. Use string validation or implement checks in @before hooks.
 
-See examples/todo-app for a working example.
+See examples/todo-app for a working example of field validation.
 ```
 
 **Bad Response**:

@@ -1,0 +1,56 @@
+/// Account resource for authentication
+///
+/// This resource demonstrates:
+/// - Email validation and normalization
+/// - Password hash storage
+/// - Account status tracking
+/// - Email verification workflow
+/// - API token generation for authentication
+resource Account {
+  // Primary key
+  id: uuid! @primary @auto
+
+  // Email must be unique and normalized
+  // This is the primary login identifier
+  email: string! @unique @min(5) @max(255)
+
+  // Password hash (bcrypt in production)
+  // Never store plain text passwords
+  // NOTE: Hash passwords in your application code BEFORE creating accounts
+  // The Crypto namespace is not yet available in lifecycle hooks
+  // Length 60 is standard for bcrypt hashes
+  password_hash: string! @min(60) @max(255)
+
+  // Account status tracking
+  // Possible values: "pending", "active", "suspended", "deleted"
+  status: string! @default("pending")
+
+  // Email verification
+  // True once user verifies their email address
+  email_verified: bool! @default(false)
+
+  // Optional verification token
+  // Set when account created, cleared when email verified
+  verification_token: string?
+
+  // API token for authentication
+  // Generated after successful login
+  // In production, use JWT or session tokens
+  api_token: string?
+
+  // Last login tracking
+  last_login_at: timestamp?
+
+  // Timestamps
+  created_at: timestamp! @auto
+  updated_at: timestamp! @auto_update
+
+  // Normalize email to lowercase for consistent lookup
+  @before create {
+    self.email = String.downcase(self.email)
+  }
+
+  @before update {
+    self.email = String.downcase(self.email)
+  }
+}

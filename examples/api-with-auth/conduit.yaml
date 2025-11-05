@@ -1,0 +1,5 @@
+# API with Authentication Example Configuration
+# Demonstrates account management, API keys, and audit logging
+project:
+  name: api-with-auth
+  version: 0.1.0

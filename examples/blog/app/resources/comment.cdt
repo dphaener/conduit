@@ -1,0 +1,52 @@
+/// Comment resource
+///
+/// This resource demonstrates:
+/// - Multiple belongs_to relationships in one resource
+/// - Comments belong to both Post (what they're commenting on)
+///   and User (who wrote the comment)
+/// - Different on_delete behaviors for different relationships
+/// - String trimming with lifecycle hooks
+resource Comment {
+  // Primary key - auto-generated UUID
+  id: uuid! @primary @auto
+
+  // Comment text - limited to 2000 characters
+  // Must have at least 1 character (no empty comments)
+  content: text! @min(1) @max(2000)
+
+  // Foreign keys for relationships
+  // post_id: which post this comment is on
+  // author_id: who wrote this comment
+  post_id: uuid!
+  author_id: uuid!
+
+  // Timestamps
+  created_at: timestamp! @auto
+  updated_at: timestamp! @auto_update
+
+  // Relationship: Comment belongs to Post
+  // on_delete: cascade means if the post is deleted,
+  // all its comments are automatically deleted too
+  post: Post! {
+    foreign_key: "post_id"
+    on_delete: cascade
+  }
+
+  // Relationship: Comment belongs to User (author)
+  // on_delete: restrict prevents deleting users who have comments
+  // You'd need to delete or reassign their comments first
+  author: User! {
+    foreign_key: "author_id"
+    on_delete: restrict
+  }
+
+  // Trim whitespace from content before saving
+  // Removes leading/trailing spaces from user input
+  @before create {
+    self.content = String.trim(self.content)
+  }
+
+  @before update {
+    self.content = String.trim(self.content)
+  }
+}

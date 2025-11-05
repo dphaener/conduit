@@ -16,6 +16,8 @@ jobs:
         example:
           - minimal
           - todo-app
+          - blog
+          - api-with-auth
       fail-fast: false
 
     steps:
@@ -72,3 +74,5 @@ jobs:
           echo "✓ All examples built successfully!"
           echo "  - minimal"
           echo "  - todo-app"
+          echo "  - blog"
+          echo "  - api-with-auth"

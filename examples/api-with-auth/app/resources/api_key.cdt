@@ -1,0 +1,66 @@
+/// API Key resource for programmatic access
+///
+/// This resource demonstrates:
+/// - API key management for service accounts
+/// - Expiration dates with optional fields
+/// - Token scopes and permissions
+/// - Revocation tracking
+/// - Last used tracking
+resource ApiKey {
+  // Primary key
+  id: uuid! @primary @auto
+
+  // The account this API key belongs to
+  account_id: uuid!
+
+  // Human-readable name for this key
+  // Helps users identify different keys
+  name: string! @min(3) @max(100)
+
+  // The actual API key token
+  // Should be a secure random string (32+ characters)
+  // Only shown once when created
+  key_hash: string! @unique @min(64) @max(255)
+
+  // Optional description
+  description: text?
+
+  // Permission scopes (comma-separated list)
+  // Examples: "read", "write", "admin"
+  // In production, use a proper permissions system
+  scopes: string! @default("read")
+
+  // Key status
+  // Possible values: "active", "revoked", "expired"
+  status: string! @default("active")
+
+  // Optional expiration date
+  // If null, key never expires
+  expires_at: timestamp?
+
+  // When the key was last used
+  // Updated on each API request
+  last_used_at: timestamp?
+
+  // When the key was revoked (if applicable)
+  revoked_at: timestamp?
+
+  // Timestamps
+  created_at: timestamp! @auto
+  updated_at: timestamp! @auto_update
+
+  // Relationship: API key belongs to account
+  account: Account! {
+    foreign_key: "account_id"
+    on_delete: cascade
+  }
+
+  // Normalize scopes to lowercase
+  @before create {
+    self.scopes = String.downcase(self.scopes)
+  }
+
+  @before update {
+    self.scopes = String.downcase(self.scopes)
+  }
+}
