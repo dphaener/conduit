@@ -16,7 +16,37 @@ func (g *Generator) generateCreate(resource *ast.ResourceNode) {
 		receiverName, resource.Name)
 	g.indent++
 
-	// Validate first
+	// 1. Generate @auto fields FIRST (UUIDs, timestamps)
+	g.writeLine("// Generate @auto fields (UUIDs, timestamps)")
+	g.generateAutoFields(resource, "create")
+	if hasAutoFields(resource) {
+		g.writeLine("")
+	}
+
+	// 2. Call BeforeCreate hook if it exists
+	if hasHook(resource, "before", "create") {
+		g.writeLine("// Call BeforeCreate hook")
+		g.writeLine("if err := %s.BeforeCreate(ctx, db); err != nil {", receiverName)
+		g.indent++
+		g.writeLine(`return fmt.Errorf("before create hook failed: %w", err)`)
+		g.indent--
+		g.writeLine("}")
+		g.writeLine("")
+	}
+
+	// 3. Call BeforeSave hook if it exists
+	if hasHook(resource, "before", "save") {
+		g.writeLine("// Call BeforeSave hook")
+		g.writeLine("if err := %s.BeforeSave(ctx, db); err != nil {", receiverName)
+		g.indent++
+		g.writeLine(`return fmt.Errorf("before save hook failed: %w", err)`)
+		g.indent--
+		g.writeLine("}")
+		g.writeLine("")
+	}
+
+	// 4. Validate AFTER hooks have run
+	g.writeLine("// Validate after hooks have run")
 	g.writeLine("if err := %s.Validate(); err != nil {", receiverName)
 	g.indent++
 	g.writeLine(`return fmt.Errorf("validation failed: %w", err)`)
@@ -24,13 +54,18 @@ func (g *Generator) generateCreate(resource *ast.ResourceNode) {
 	g.writeLine("}")
 	g.writeLine("")
 
-	// Handle @auto fields (UUID generation, timestamps)
-	g.generateAutoFields(resource, "create")
-	if hasAutoFields(resource) {
-		g.writeLine("")
-	}
+	// 5. Begin transaction
+	g.writeLine("// Begin transaction")
+	g.writeLine("tx, err := db.BeginTx(ctx, nil)")
+	g.writeLine("if err != nil {")
+	g.indent++
+	g.writeLine(`return fmt.Errorf("failed to begin transaction: %w", err)`)
+	g.indent--
+	g.writeLine("}")
+	g.writeLine("defer tx.Rollback()")
+	g.writeLine("")
 
-	// Build INSERT query
+	// 6. Build INSERT query
 	columns, placeholders, values := g.buildInsertQuery(resource)
 
 	// Check if we need to return ID
@@ -44,25 +79,57 @@ func (g *Generator) generateCreate(resource *ast.ResourceNode) {
 	}
 	g.writeLine("")
 
-	// Execute query
+	// Execute INSERT
+	g.writeLine("// Execute INSERT")
 	if needsReturningID {
-		g.writeLine("err := db.QueryRowContext(ctx, query, %s).Scan(&%s.ID)",
+		g.writeLine("err = tx.QueryRowContext(ctx, query, %s).Scan(&%s.ID)",
 			strings.Join(values, ", "), receiverName)
 		g.writeLine("if err != nil {")
 		g.indent++
-		g.writeLine("return fmt.Errorf(\"failed to create %s: %%w\", err)", strings.ToLower(resource.Name))
+		g.writeLine("return fmt.Errorf(\"failed to insert %s: %%w\", err)", strings.ToLower(resource.Name))
 		g.indent--
 		g.writeLine("}")
 	} else {
-		g.writeLine("_, err := db.ExecContext(ctx, query, %s)", strings.Join(values, ", "))
+		g.writeLine("_, err = tx.ExecContext(ctx, query, %s)", strings.Join(values, ", "))
 		g.writeLine("if err != nil {")
 		g.indent++
-		g.writeLine("return fmt.Errorf(\"failed to create %s: %%w\", err)", strings.ToLower(resource.Name))
+		g.writeLine("return fmt.Errorf(\"failed to insert %s: %%w\", err)", strings.ToLower(resource.Name))
 		g.indent--
 		g.writeLine("}")
 	}
-
 	g.writeLine("")
+
+	// 7. Call AfterCreate hook if it exists
+	if hasHook(resource, "after", "create") {
+		g.writeLine("// Call AfterCreate hook")
+		g.writeLine("if err := %s.AfterCreate(ctx, tx); err != nil {", receiverName)
+		g.indent++
+		g.writeLine(`return fmt.Errorf("after create hook failed: %w", err)`)
+		g.indent--
+		g.writeLine("}")
+		g.writeLine("")
+	}
+
+	// 8. Call AfterSave hook if it exists
+	if hasHook(resource, "after", "save") {
+		g.writeLine("// Call AfterSave hook")
+		g.writeLine("if err := %s.AfterSave(ctx, tx); err != nil {", receiverName)
+		g.indent++
+		g.writeLine(`return fmt.Errorf("after save hook failed: %w", err)`)
+		g.indent--
+		g.writeLine("}")
+		g.writeLine("")
+	}
+
+	// 9. Commit transaction
+	g.writeLine("// Commit transaction")
+	g.writeLine("if err := tx.Commit(); err != nil {")
+	g.indent++
+	g.writeLine(`return fmt.Errorf("failed to commit transaction: %w", err)`)
+	g.indent--
+	g.writeLine("}")
+	g.writeLine("")
+
 	g.writeLine("return nil")
 	g.indent--
 	g.writeLine("}")
@@ -120,7 +187,37 @@ func (g *Generator) generateUpdate(resource *ast.ResourceNode) {
 		receiverName, resource.Name)
 	g.indent++
 
-	// Validate first
+	// 1. Generate @auto_update fields
+	g.writeLine("// Generate @auto_update fields (timestamps)")
+	g.generateAutoFields(resource, "update")
+	if hasAutoUpdateFields(resource) {
+		g.writeLine("")
+	}
+
+	// 2. Call BeforeUpdate hook if it exists
+	if hasHook(resource, "before", "update") {
+		g.writeLine("// Call BeforeUpdate hook")
+		g.writeLine("if err := %s.BeforeUpdate(ctx, db); err != nil {", receiverName)
+		g.indent++
+		g.writeLine(`return fmt.Errorf("before update hook failed: %w", err)`)
+		g.indent--
+		g.writeLine("}")
+		g.writeLine("")
+	}
+
+	// 3. Call BeforeSave hook if it exists
+	if hasHook(resource, "before", "save") {
+		g.writeLine("// Call BeforeSave hook")
+		g.writeLine("if err := %s.BeforeSave(ctx, db); err != nil {", receiverName)
+		g.indent++
+		g.writeLine(`return fmt.Errorf("before save hook failed: %w", err)`)
+		g.indent--
+		g.writeLine("}")
+		g.writeLine("")
+	}
+
+	// 4. Validate AFTER hooks have run
+	g.writeLine("// Validate after hooks have run")
 	g.writeLine("if err := %s.Validate(); err != nil {", receiverName)
 	g.indent++
 	g.writeLine(`return fmt.Errorf("validation failed: %w", err)`)
@@ -128,13 +225,18 @@ func (g *Generator) generateUpdate(resource *ast.ResourceNode) {
 	g.writeLine("}")
 	g.writeLine("")
 
-	// Handle @auto_update fields
-	g.generateAutoFields(resource, "update")
-	if hasAutoUpdateFields(resource) {
-		g.writeLine("")
-	}
+	// 5. Begin transaction
+	g.writeLine("// Begin transaction")
+	g.writeLine("tx, err := db.BeginTx(ctx, nil)")
+	g.writeLine("if err != nil {")
+	g.indent++
+	g.writeLine(`return fmt.Errorf("failed to begin transaction: %w", err)`)
+	g.indent--
+	g.writeLine("}")
+	g.writeLine("defer tx.Rollback()")
+	g.writeLine("")
 
-	// Build UPDATE query
+	// 6. Build UPDATE query
 	setClauses, values := g.buildUpdateQuery(resource)
 
 	g.writeLine("query := `UPDATE %s SET %s WHERE id = $%d`",
@@ -144,10 +246,43 @@ func (g *Generator) generateUpdate(resource *ast.ResourceNode) {
 	// Add ID to values
 	values = append(values, fmt.Sprintf("%s.ID", receiverName))
 
-	g.writeLine("_, err := db.ExecContext(ctx, query, %s)", strings.Join(values, ", "))
+	// Execute UPDATE
+	g.writeLine("// Execute UPDATE")
+	g.writeLine("_, err = tx.ExecContext(ctx, query, %s)", strings.Join(values, ", "))
 	g.writeLine("if err != nil {")
 	g.indent++
 	g.writeLine("return fmt.Errorf(\"failed to update %s: %%w\", err)", strings.ToLower(resource.Name))
+	g.indent--
+	g.writeLine("}")
+	g.writeLine("")
+
+	// 7. Call AfterUpdate hook if it exists
+	if hasHook(resource, "after", "update") {
+		g.writeLine("// Call AfterUpdate hook")
+		g.writeLine("if err := %s.AfterUpdate(ctx, tx); err != nil {", receiverName)
+		g.indent++
+		g.writeLine(`return fmt.Errorf("after update hook failed: %w", err)`)
+		g.indent--
+		g.writeLine("}")
+		g.writeLine("")
+	}
+
+	// 8. Call AfterSave hook if it exists
+	if hasHook(resource, "after", "save") {
+		g.writeLine("// Call AfterSave hook")
+		g.writeLine("if err := %s.AfterSave(ctx, tx); err != nil {", receiverName)
+		g.indent++
+		g.writeLine(`return fmt.Errorf("after save hook failed: %w", err)`)
+		g.indent--
+		g.writeLine("}")
+		g.writeLine("")
+	}
+
+	// 9. Commit transaction
+	g.writeLine("// Commit transaction")
+	g.writeLine("if err := tx.Commit(); err != nil {")
+	g.indent++
+	g.writeLine(`return fmt.Errorf("failed to commit transaction: %w", err)`)
 	g.indent--
 	g.writeLine("}")
 	g.writeLine("")
@@ -251,20 +386,54 @@ func (g *Generator) generatePatch(resource *ast.ResourceNode) {
 	g.writeLine("}")
 	g.writeLine("")
 
-	// Validate merged result
-	g.writeLine("// Validate the merged result")
-	g.writeLine("if err := %s.Validate(); err != nil {", receiverName)
-	g.indent++
-	g.writeLine(`return fmt.Errorf("validation failed: %%w", err)`)
-	g.indent--
-	g.writeLine("}")
-	g.writeLine("")
-
-	// Handle @auto_update fields
+	// Generate @auto_update fields
+	g.writeLine("// Generate @auto_update fields (timestamps)")
 	g.generateAutoFields(resource, "update")
 	if hasAutoUpdateFields(resource) {
 		g.writeLine("")
 	}
+
+	// Call BeforeUpdate hook if it exists
+	if hasHook(resource, "before", "update") {
+		g.writeLine("// Call BeforeUpdate hook")
+		g.writeLine("if err := %s.BeforeUpdate(ctx, db); err != nil {", receiverName)
+		g.indent++
+		g.writeLine(`return fmt.Errorf("before update hook failed: %w", err)`)
+		g.indent--
+		g.writeLine("}")
+		g.writeLine("")
+	}
+
+	// Call BeforeSave hook if it exists
+	if hasHook(resource, "before", "save") {
+		g.writeLine("// Call BeforeSave hook")
+		g.writeLine("if err := %s.BeforeSave(ctx, db); err != nil {", receiverName)
+		g.indent++
+		g.writeLine(`return fmt.Errorf("before save hook failed: %w", err)`)
+		g.indent--
+		g.writeLine("}")
+		g.writeLine("")
+	}
+
+	// Validate merged result AFTER hooks
+	g.writeLine("// Validate the merged result after hooks have run")
+	g.writeLine("if err := %s.Validate(); err != nil {", receiverName)
+	g.indent++
+	g.writeLine(`return fmt.Errorf("validation failed: %w", err)`)
+	g.indent--
+	g.writeLine("}")
+	g.writeLine("")
+
+	// Begin transaction
+	g.writeLine("// Begin transaction")
+	g.writeLine("tx, err := db.BeginTx(ctx, nil)")
+	g.writeLine("if err != nil {")
+	g.indent++
+	g.writeLine(`return fmt.Errorf("failed to begin transaction: %w", err)`)
+	g.indent--
+	g.writeLine("}")
+	g.writeLine("defer tx.Rollback()")
+	g.writeLine("")
 
 	// Build UPDATE query for all fields (same as Update)
 	setClauses, values := g.buildUpdateQuery(resource)
@@ -276,10 +445,43 @@ func (g *Generator) generatePatch(resource *ast.ResourceNode) {
 	// Add ID to values
 	values = append(values, fmt.Sprintf("%s.ID", receiverName))
 
-	g.writeLine("_, err := db.ExecContext(ctx, query, %s)", strings.Join(values, ", "))
+	// Execute UPDATE
+	g.writeLine("// Execute UPDATE")
+	g.writeLine("_, err = tx.ExecContext(ctx, query, %s)", strings.Join(values, ", "))
 	g.writeLine("if err != nil {")
 	g.indent++
 	g.writeLine("return fmt.Errorf(\"failed to patch %s: %%w\", err)", strings.ToLower(resource.Name))
+	g.indent--
+	g.writeLine("}")
+	g.writeLine("")
+
+	// Call AfterUpdate hook if it exists
+	if hasHook(resource, "after", "update") {
+		g.writeLine("// Call AfterUpdate hook")
+		g.writeLine("if err := %s.AfterUpdate(ctx, tx); err != nil {", receiverName)
+		g.indent++
+		g.writeLine(`return fmt.Errorf("after update hook failed: %w", err)`)
+		g.indent--
+		g.writeLine("}")
+		g.writeLine("")
+	}
+
+	// Call AfterSave hook if it exists
+	if hasHook(resource, "after", "save") {
+		g.writeLine("// Call AfterSave hook")
+		g.writeLine("if err := %s.AfterSave(ctx, tx); err != nil {", receiverName)
+		g.indent++
+		g.writeLine(`return fmt.Errorf("after save hook failed: %w", err)`)
+		g.indent--
+		g.writeLine("}")
+		g.writeLine("")
+	}
+
+	// Commit transaction
+	g.writeLine("// Commit transaction")
+	g.writeLine("if err := tx.Commit(); err != nil {")
+	g.indent++
+	g.writeLine(`return fmt.Errorf("failed to commit transaction: %w", err)`)
 	g.indent--
 	g.writeLine("}")
 	g.writeLine("")
@@ -298,13 +500,57 @@ func (g *Generator) generateDelete(resource *ast.ResourceNode) {
 		receiverName, resource.Name)
 	g.indent++
 
+	// 1. Call BeforeDelete hook if it exists
+	if hasHook(resource, "before", "delete") {
+		g.writeLine("// Call BeforeDelete hook")
+		g.writeLine("if err := %s.BeforeDelete(ctx, db); err != nil {", receiverName)
+		g.indent++
+		g.writeLine(`return fmt.Errorf("before delete hook failed: %w", err)`)
+		g.indent--
+		g.writeLine("}")
+		g.writeLine("")
+	}
+
+	// 2. Begin transaction
+	g.writeLine("// Begin transaction")
+	g.writeLine("tx, err := db.BeginTx(ctx, nil)")
+	g.writeLine("if err != nil {")
+	g.indent++
+	g.writeLine(`return fmt.Errorf("failed to begin transaction: %w", err)`)
+	g.indent--
+	g.writeLine("}")
+	g.writeLine("defer tx.Rollback()")
+	g.writeLine("")
+
+	// 3. Execute DELETE
 	g.writeLine("query := `DELETE FROM %s WHERE id = $1`", g.toTableName(resource.Name))
 	g.writeLine("")
 
-	g.writeLine("_, err := db.ExecContext(ctx, query, %s.ID)", receiverName)
+	g.writeLine("// Execute DELETE")
+	g.writeLine("_, err = tx.ExecContext(ctx, query, %s.ID)", receiverName)
 	g.writeLine("if err != nil {")
 	g.indent++
 	g.writeLine("return fmt.Errorf(\"failed to delete %s: %%w\", err)", strings.ToLower(resource.Name))
+	g.indent--
+	g.writeLine("}")
+	g.writeLine("")
+
+	// 4. Call AfterDelete hook if it exists
+	if hasHook(resource, "after", "delete") {
+		g.writeLine("// Call AfterDelete hook")
+		g.writeLine("if err := %s.AfterDelete(ctx, tx); err != nil {", receiverName)
+		g.indent++
+		g.writeLine(`return fmt.Errorf("after delete hook failed: %w", err)`)
+		g.indent--
+		g.writeLine("}")
+		g.writeLine("")
+	}
+
+	// 5. Commit transaction
+	g.writeLine("// Commit transaction")
+	g.writeLine("if err := tx.Commit(); err != nil {")
+	g.indent++
+	g.writeLine(`return fmt.Errorf("failed to commit transaction: %w", err)`)
 	g.indent--
 	g.writeLine("}")
 	g.writeLine("")
@@ -525,4 +771,14 @@ func needsAutoID(resource *ast.ResourceNode) bool {
 		}
 	}
 	return true // Default ID needs RETURNING
+}
+
+// hasHook checks if a resource has a specific lifecycle hook
+func hasHook(resource *ast.ResourceNode, timing, event string) bool {
+	for _, hook := range resource.Hooks {
+		if hook.Timing == timing && hook.Event == event {
+			return true
+		}
+	}
+	return false
 }
