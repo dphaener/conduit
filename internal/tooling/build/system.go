@@ -675,6 +675,12 @@ func (s *System) writeGeneratedFiles(files map[string]string) error {
 		}
 	}
 
+	// Run goimports to fix imports and formatting before moving files
+	if err := s.runGoimports(tmpDir); err != nil {
+		os.RemoveAll(tmpDir) // Clean up on failure
+		return fmt.Errorf("failed to run goimports: %w", err)
+	}
+
 	// All files written successfully - now atomically swap directories
 	// Remove old generated directory if it exists
 	if err := os.RemoveAll(generatedDir); err != nil && !os.IsNotExist(err) {
@@ -690,6 +696,41 @@ func (s *System) writeGeneratedFiles(files map[string]string) error {
 	// Copy migration files to root migrations/ directory so conduit migrate can find them
 	if err := s.copyMigrationsToRoot(files); err != nil {
 		return fmt.Errorf("failed to copy migrations to root: %w", err)
+	}
+
+	return nil
+}
+
+// runGoimports runs goimports on all .go files in a directory to fix imports and formatting.
+// This eliminates unused imports and ensures properly formatted Go code.
+// If goimports is not available, it logs a warning but doesn't fail the build.
+func (s *System) runGoimports(dir string) error {
+	// Check if goimports is available
+	goimportsPath, err := exec.LookPath("goimports")
+	if err != nil {
+		// goimports not found - this is not fatal, just a warning
+		// The code might have unused imports, but it should still compile
+		if s.options.Verbose {
+			fmt.Fprintf(os.Stderr, "Warning: goimports not found in PATH, skipping import cleanup\n")
+			fmt.Fprintf(os.Stderr, "Install with: go install golang.org/x/tools/cmd/goimports@latest\n")
+		}
+		return nil
+	}
+
+	if s.options.Verbose {
+		fmt.Printf("Running goimports on %s...\n", dir)
+	}
+
+	// Run goimports recursively on the directory
+	// -w: write result to source file instead of stdout
+	// -local: put imports beginning with this string after 3rd-party packages
+	cmd := exec.Command(goimportsPath, "-w", dir)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("goimports failed: %w\nOutput: %s", err, string(output))
+	}
+
+	if s.options.Verbose {
+		fmt.Println("goimports completed successfully")
 	}
 
 	return nil
